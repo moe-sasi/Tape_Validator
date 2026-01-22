@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.18.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "asf-validator"
+version = "0.1.0"
+description = "Portable CLI for validating ASF loan tapes."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "ASF Validator Team" }]
+dependencies = [
+  "pandas",
+  "openpyxl",
+  "numpy-financial",
+  "typer",
+  "rich",
+]
+
+[project.scripts]
+asf-validator = "asf_validator.cli:app"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra"
+testpaths = ["tests"]
