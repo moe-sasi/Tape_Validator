@@ -21,6 +21,9 @@ pip install -e .
 asf-validator run path/to/tape.xlsx --output validation-report.xlsx
 ```
 
+### Example usage
+`python -m asf_validator.cli "SEMT_2026-2_01212026(RA).xlsx" --output validation-report.xlsx`
+
 ## Project layout
 
 ```

@@ -1,6 +1,8 @@
 # Source: Existing asf_validations.py
 
 import pandas as pd
+import numpy as np
+import pdb # For debugging purposes
 
 # Originator Doc Code
 def validate_originator_doc_code(originator_doc_code):
@@ -21,7 +23,7 @@ def validate_months_bankruptcy(months_bankruptcy):
     """
     Returns True if Months Bankruptcy is populated (non-blank).
     """
-    return (months_bankruptcy != "") or (~pd.isna(months_bankruptcy))
+    return (months_bankruptcy != "") and (not pd.isna(months_bankruptcy))
 
 # Primary Borrower FICO
 def validate_original_primary_borrower_fico(original_primary_borrower_fico):
@@ -50,7 +52,9 @@ def validate_buy_down_period(buy_down_period):
     """
     Returns True if Buy Down Period is a non-zero value (numeric or string).
     """
-    return buy_down_period != 0 and str(buy_down_period) != "0"
+
+    # return buy_down_period != 0 and str(buy_down_period) != "0"
+    return buy_down_period > 0
 
 # Cash-out amount
 def validate_cash_out_amount(cash_out_amount, loan_purpose, original_loan_amount):
@@ -241,7 +245,7 @@ def validate_months_foreclosure(months_foreclosure):
     """
     Returns True if Months Foreclosure is populated (i.e., not blank).
     """
-    return months_foreclosure != "" or (~pd.isna(months_foreclosure))
+    return (months_foreclosure != "") and (not pd.isna(months_foreclosure))
 
 # df["flag_months_foreclosure"] = df["Months Foreclosure"].apply(validate_months_foreclosure)
 
@@ -433,10 +437,11 @@ def validate_monthly_debt_all_borrowers(monthly_debt_all_borrowers):
 # Flag if Mortgage Insurance Company Name is not 0
 def validate_mi_company_name(mortgage_insurance_company_name):
     """
-    Returns True if Mortgage Insurance Company Name is anything other than 0.
+    Returns True if Mortgage Insurance Company Name is anything other than "".
     """
     try:
-        return mortgage_insurance_company_name not in ["", "0", 0]
+        # return mortgage_insurance_company_name not in ["", "0", 0]
+        return ~np.isnan(mortgage_insurance_company_name)
     except:
         return True
 
@@ -715,9 +720,9 @@ def validate_periodic_cap(amortization_type, cap_up, cap_down):
     - OR Amortization Type is 1 and cap_down is non-zero.
     """
     try:
-        if amortization_type == 2 and (cap_up in ["", 0, None]):
+        if amortization_type == 2 and pd.isna(cap_up):
             return True
-        if amortization_type == 1 and cap_down not in ["", 0, None]:
+        if amortization_type == 1 and not pd.isna(cap_down):
             return True
         return False
     except:

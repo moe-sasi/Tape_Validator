@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Iterable, Optional
 
 import pandas as pd
@@ -12,15 +13,9 @@ def normalize_columns(columns: Iterable[str]) -> list[str]:
     """Normalize column names to lowercase snake-case."""
     normalized = []
     for col in columns:
-        cleaned = (
-            str(col)
-            .strip()
-            .lower()
-            .replace(" ", "_")
-            .replace("-", "_")
-        )
-        while "__" in cleaned:
-            cleaned = cleaned.replace("__", "_")
+        cleaned = re.sub(r"[^0-9A-Za-z]+", "_", str(col).strip().lower())
+        cleaned = cleaned.strip("_")
+        cleaned = re.sub(r"_+", "_", cleaned)
         normalized.append(cleaned)
     return normalized
 
