@@ -17,6 +17,10 @@ def write_report(results: Mapping[str, Any], output_path: Path) -> None:
     issues_df = issues if isinstance(issues, pd.DataFrame) else pd.DataFrame(issues)
     rule_summary_df = results.get("rule_summary")
     skipped_rules_df = results.get("skipped_rules")
+    rule_summary_output = rule_summary_df
+    if isinstance(rule_summary_df, pd.DataFrame) and "issue_count" in rule_summary_df.columns:
+        issue_counts = pd.to_numeric(rule_summary_df["issue_count"], errors="coerce").fillna(0)
+        rule_summary_output = rule_summary_df[issue_counts > 0]
 
     issue_count = len(issues_df)
     executed_rules = len(rule_summary_df) if isinstance(rule_summary_df, pd.DataFrame) else 0
@@ -38,7 +42,7 @@ def write_report(results: Mapping[str, Any], output_path: Path) -> None:
         summary_df.to_excel(writer, index=False, sheet_name="summary")
         if isinstance(issues_df, pd.DataFrame):
             issues_df.to_excel(writer, index=False, sheet_name="issues")
-        if isinstance(rule_summary_df, pd.DataFrame):
-            rule_summary_df.to_excel(writer, index=False, sheet_name="rule_summary")
+        if isinstance(rule_summary_output, pd.DataFrame):
+            rule_summary_output.to_excel(writer, index=False, sheet_name="rule_summary")
         if isinstance(skipped_rules_df, pd.DataFrame):
             skipped_rules_df.to_excel(writer, index=False, sheet_name="skipped_rules")
