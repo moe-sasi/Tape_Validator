@@ -501,6 +501,17 @@ def validate_original_loan_amount(original_loan_amount):
     """
     return original_loan_amount in ["", 0, None]
 
+# 41a. Original Loan Amount Range
+# Flag if Original Loan Amount is < 10,000 or > 10,000,000
+def validate_original_loan_amount_out_of_range(original_loan_amount):
+    """
+    Returns True if Original Loan Amount is below 10,000 or above 10,000,000.
+    """
+    try:
+        return float(original_loan_amount) < 10000 or float(original_loan_amount) > 10000000
+    except:
+        return True
+
 # df["flag_original_loan_amount"] = df["Original Loan Amount"].apply(validate_original_loan_amount)
 
 # 42. Original LTV
