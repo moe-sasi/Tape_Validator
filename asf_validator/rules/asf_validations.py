@@ -1024,7 +1024,19 @@ def validate_zip_code(postal_code):
     Returns True if Postal Code is blank or not 5 digits.
     """
     try:
-        return postal_code == "" or len(str(postal_code)) != 5
+        if postal_code is None or (isinstance(postal_code, str) and not postal_code.strip()):
+            return True
+        if pd.isna(postal_code):
+            return True
+
+        if isinstance(postal_code, (int, np.integer)):
+            postal_code = f"{postal_code:05d}"
+        elif isinstance(postal_code, float) and postal_code.is_integer():
+            postal_code = f"{int(postal_code):05d}"
+        else:
+            postal_code = str(postal_code).strip()
+
+        return len(postal_code) != 5
     except:
         return True
 
