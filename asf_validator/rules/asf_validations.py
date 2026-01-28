@@ -1429,6 +1429,47 @@ def validate_current_gt_original_balance(current_loan_amount, original_loan_amou
 
 # df["flag_current_gt_original_balance"] = df.apply(lambda row: validate_current_gt_original_balance(row["Current Loan Amount"], row["Original Loan Amount"]), axis=1)
 
+# 106A. Age = 0 and Current Bal <> Original Bal
+# Flag if Age is 0 and Current Loan Amount differs from Original Loan Amount
+def validate_age_zero_current_balance_diff(
+    original_amortization_term,
+    maturity_date,
+    interest_paid_through_date,
+    current_loan_amount,
+    original_loan_amount,
+):
+    """
+    Returns True if:
+    - Age = Original Amortization Term - months_between(Maturity Date, Interest Paid Through Date) equals 0,
+    - AND Current Loan Amount != Original Loan Amount.
+    """
+    try:
+        if original_amortization_term in ["", None] or pd.isna(original_amortization_term):
+            return True
+        if maturity_date in ["", None] or pd.isna(maturity_date):
+            return True
+        if interest_paid_through_date in ["", None] or pd.isna(interest_paid_through_date):
+            return True
+
+        maturity_dt = pd.to_datetime(maturity_date)
+        paid_through_dt = pd.to_datetime(interest_paid_through_date)
+        if pd.isna(maturity_dt) or pd.isna(paid_through_dt):
+            return True
+
+        months_between = (maturity_dt.year - paid_through_dt.year) * 12 + (
+            maturity_dt.month - paid_through_dt.month
+        )
+        age = float(original_amortization_term) - months_between
+        if round(age, 6) == 0:
+            return float(current_loan_amount) != float(original_loan_amount)
+        return False
+    except:
+        return True
+
+# df["flag_age_zero_current_balance_diff"] = df.apply(lambda row: validate_age_zero_current_balance_diff(
+#     row["Original Amortization Term"], row["Maturity Date"], row["Interest Paid Through Date"],
+#     row["Current Loan Amount"], row["Original Loan Amount"]), axis=1)
+
 # 107. Margin < Floor
 # Flag if Gross Margin is less than Lifetime Minimum Rate (Floor)
 def validate_margin_less_than_floor(gross_margin, lifetime_min_rate_floor):
