@@ -881,8 +881,9 @@ def validate_purpose_id_vs_sales_price(loan_purpose, sales_price):
     - OR not 6 or 7 and Sales Price is present
     """
     try:
+        
         lp = int(loan_purpose)
-        sp_blank = sales_price in ["", 0, None]
+        sp_blank = (sales_price in ["", 0, None]) | (pd.isna(sales_price))
         sp_present = not sp_blank
         if lp in [6, 7] and sp_blank:
             return True
@@ -1535,16 +1536,16 @@ def validate_purchase_with_years_in_home(loan_purpose, years_in_home):
 
 # 117. Paid Thru < First Pay
 # Flag if Interest Paid Through Date is before First Payment Date and balances are unequal
-def validate_paid_thru_lt_first_pay(interest_paid_through_date, first_payment_date, original_loan_amount, current_loan_amount):
-    """
-    Returns True if:
-    - Interest Paid Through Date < First Payment Date, and
-    - Original Loan Amount != Current Loan Amount
-    """
-    try:
-        return interest_paid_through_date < first_payment_date and original_loan_amount != current_loan_amount
-    except:
-        return True
+# def validate_paid_thru_lt_first_pay(interest_paid_through_date, first_payment_date, original_loan_amount, current_loan_amount):
+#     """
+#     Returns True if:
+#     - Interest Paid Through Date < First Payment Date, and
+#     - Original Loan Amount != Current Loan Amount
+#     """
+#     try:
+#         return interest_paid_through_date < first_payment_date and original_loan_amount != current_loan_amount
+#     except:
+#         return True
 
 # df["flag_paid_thru_lt_first_pay"] = df.apply(lambda row: validate_paid_thru_lt_first_pay(row["Interest Paid Through Date"], row["First Payment Date of Loan"], row["Original Loan Amount"], row["Current Loan Amount"]), axis=1)
 
