@@ -211,5 +211,13 @@ SEMT_2026-2_01212026(RA).xlsx
 validation-report.xlsx
 
 # Files
-.xlsx
+*.xla
+*.xlam
+*.xls
+*.xlsb
+*.xlsm
+*.xlsx
+*.xlt
+*.xltm
+*.xltx
 SEMT_2026-2-Validation.xlsx
