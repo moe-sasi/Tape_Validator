@@ -585,6 +585,25 @@ def validate_original_property_valuation_type(original_property_valuation_type):
 
 # df["flag_original_property_valuation_type"] = df["Original Property Valuation Type"].apply(validate_original_property_valuation_type)
 
+# 46a. Original Appraisal 24+ months old
+# Flag if Original Property Valuation Date is 24 months or older than Interest Paid Through Date
+def validate_original_appraisal_24_months_old(
+    original_property_valuation_date,
+    interest_paid_through_date,
+):
+    """
+    Returns True if Original Property Valuation Date is 24 months or older than Interest Paid Through Date.
+    """
+    try:
+        if pd.isna(original_property_valuation_date) or pd.isna(interest_paid_through_date):
+            return True
+        valuation_date = pd.to_datetime(original_property_valuation_date)
+        paid_through_date = pd.to_datetime(interest_paid_through_date)
+        cutoff_date = paid_through_date - pd.DateOffset(months=24)
+        return valuation_date <= cutoff_date
+    except:
+        return True
+
 # 47. Original Term to Maturity
 # Flag if Original Term to Maturity is out of bounds, missing, zero, or not equal to Original Amortization Term
 def validate_original_term_to_maturity_vs_amortization(original_term_to_maturity, original_amortization_term):
