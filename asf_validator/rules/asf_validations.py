@@ -36,13 +36,13 @@ def validate_original_primary_borrower_fico(original_primary_borrower_fico):
     except:
         return True
 
-# Flag if borrower's FICO score is less than 650
-def validate_borrower_fico_below_650(borrower_fico_score):
+# Flag if borrower's FICO score is less than or equal to 660
+def validate_borrower_fico_at_or_below_660(borrower_fico_score):
     """
-    Returns True if FICO is below 650.
+    Returns True if FICO is less than or equal to 660.
     """
     try:
-        return borrower_fico_score < 650
+        return borrower_fico_score <= 660
     except:
         return True
 
