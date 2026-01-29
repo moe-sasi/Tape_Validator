@@ -249,6 +249,40 @@ def validate_fico_model_used(fico_model_used):
 
 # df["flag_fico_model_used"] = df["FICO Model Used"].apply(validate_fico_model_used)
 
+# 18A. FICO Score Range By Model Used
+# Flag if FICO score is outside the allowable range for the specified model.
+def validate_fico_score_by_model(fico_model_used, borrower_fico_score):
+    """
+    Returns True if FICO score is outside the allowable range for the model used.
+    - 1/2 (Classic/Classic 08): 350–850 (set classic_min to 300 for full classic range)
+    - 3 (Next Gen): 150–950
+    - 99 (Unknown): 150–950
+    """
+    try:
+        if borrower_fico_score in ["", None] or pd.isna(borrower_fico_score):
+            return False
+        if fico_model_used in ["", None] or pd.isna(fico_model_used):
+            return False
+
+        model = int(float(fico_model_used))
+        fico = float(borrower_fico_score)
+
+        classic_min = 350
+        if model in (1, 2):
+            return fico < classic_min or fico > 850
+        if model == 3:
+            return fico < 150 or fico > 950
+        if model == 99:
+            return fico < 150 or fico > 950
+        return True
+    except:
+        return True
+
+# df["flag_fico_score_by_model"] = df.apply(
+#     lambda row: validate_fico_score_by_model(row["FICO Model Used"], row["Original Primary Borrower FICO"]),
+#     axis=1,
+# )
+
 # 19. First Adj Cap
 # Flag if Initial Interest Rate Cap is missing while Amortization Type equals 2 (adjustable rate)
 def validate_first_adj_cap(initial_interest_rate_cap_change_up, amortization_type):
@@ -643,6 +677,96 @@ def validate_original_appraisal_24_months_old(
         return valuation_date <= cutoff_date
     except:
         return True
+
+# 46b. Most Recent Valuation Type Missing/Invalid (when value present)
+# Flag if Most Recent Property Value is present but Most Recent Valuation Type is missing or not in allowed values.
+def _has_value(value):
+    if value in ["", None] or pd.isna(value):
+        return False
+    try:
+        return float(value) != 0
+    except:
+        return True
+
+
+def _parse_valuation_type_code(value):
+    if value in ["", None] or pd.isna(value):
+        return None
+    try:
+        return int(float(value))
+    except:
+        value_str = str(value).strip().upper()
+        if not value_str:
+            return None
+        digits = ""
+        for ch in value_str:
+            if ch.isdigit():
+                digits += ch
+            elif digits:
+                break
+        return int(digits) if digits else None
+
+
+def validate_most_recent_property_value_requires_valuation_type(
+    most_recent_property_value,
+    most_recent_valuation_type,
+):
+    """
+    Returns True if Most Recent Property Value is present but Most Recent Valuation Type is missing
+    or not in allowed values {1, 2, 3, 99}.
+    """
+    try:
+        if not _has_value(most_recent_property_value):
+            return False
+        code = _parse_valuation_type_code(most_recent_valuation_type)
+        return code not in {1, 2, 3, 99}
+    except:
+        return True
+
+# df["flag_most_recent_valuation_type"] = df.apply(
+#     lambda row: validate_most_recent_property_value_requires_valuation_type(
+#         row["Most Recent Property Value"], row["Most Recent Valuation Type"]
+#     ),
+#     axis=1,
+# )
+
+# 46c. Most Recent Valuation Date Missing/19010101 (when value present)
+# Flag if Most Recent Property Value is present but Most Recent Valuation Date is missing or 19010101.
+def _is_missing_or_19010101(value):
+    if value in ["", None, 0] or pd.isna(value):
+        return True
+    try:
+        if int(float(value)) == 19010101:
+            return True
+    except:
+        pass
+    dt = pd.to_datetime(value, errors="coerce")
+    if pd.isna(dt):
+        return True
+    return (dt.year, dt.month, dt.day) == (1901, 1, 1)
+
+
+def validate_most_recent_property_value_requires_valuation_date(
+    most_recent_property_value,
+    most_recent_valuation_date,
+):
+    """
+    Returns True if Most Recent Property Value is present but Most Recent Valuation Date is missing
+    or 19010101.
+    """
+    try:
+        if not _has_value(most_recent_property_value):
+            return False
+        return _is_missing_or_19010101(most_recent_valuation_date)
+    except:
+        return True
+
+# df["flag_most_recent_valuation_date"] = df.apply(
+#     lambda row: validate_most_recent_property_value_requires_valuation_date(
+#         row["Most Recent Property Value"], row["Most Recent Valuation Date"]
+#     ),
+#     axis=1,
+# )
 
 # 47. Original Term to Maturity
 # Flag if Original Term to Maturity is out of bounds, missing, zero, or not equal to Original Amortization Term
