@@ -72,6 +72,24 @@ def validate_cash_out_amount(cash_out_amount, loan_purpose, original_loan_amount
     except:
         return True
 
+# Refi/Cashout cash-out amount threshold
+def validate_refi_cash_out_threshold(loan_purpose, cash_out_amount):
+    """
+    Returns True if:
+    - Loan Purpose is 9 (Refi) and Cash Out Amount > 2000, OR
+    - Loan Purpose is 3 (Cashout) and Cash Out Amount < 2000.
+    """
+    try:
+        lp = int(float(loan_purpose))
+        if lp not in [3, 9]:
+            return False
+        amount = float(cash_out_amount)
+        if lp == 9:
+            return amount > 2000
+        return amount < 2000
+    except:
+        return True
+
 # Channel Check
 def validate_channel(channel):
     """
@@ -148,6 +166,28 @@ def validate_current_interest_rate(amortization_type, original_interest_rate, cu
         return True
 
 # df["flag_current_interest_rate"] = df.apply(lambda row: validate_current_interest_rate(row["Amortization Type"], row["Original Interest Rate"], row["Current Interest Rate"]), axis=1)
+
+# 12A. Current Rate Different From Original
+# Flag if Current Interest Rate is different from Original Interest Rate
+def validate_current_rate_different_from_original(original_interest_rate, current_interest_rate):
+    """
+    Returns True if Current Interest Rate differs from Original Interest Rate.
+    """
+    try:
+        if original_interest_rate in ["", None] or current_interest_rate in ["", None]:
+            return False
+        if pd.isna(original_interest_rate) or pd.isna(current_interest_rate):
+            return False
+        return float(current_interest_rate) != float(original_interest_rate)
+    except:
+        return True
+
+# df["flag_current_rate_different_from_original"] = df.apply(
+#     lambda row: validate_current_rate_different_from_original(
+#         row["Original Interest Rate"], row["Current Interest Rate"]
+#     ),
+#     axis=1,
+# )
 
 # 13. Original Interest Rate
 # Flag if Original Interest Rate is blank or zero, or exceeds lifetime ceiling for certain Amortization Types
@@ -862,9 +902,15 @@ def validate_initial_period_cap(amortization_type, cap_down, cap_up):
 # Flag if Property Type is blank
 def validate_property_type(property_type):
     """
-    Returns True if Property Type is blank.
+    Returns True if Property Type is blank or not an allowed value.
     """
-    return property_type == ""
+    try:
+        if property_type in ["", None] or pd.isna(property_type):
+            return True
+        # Residential property types from the ASF project restart documentation
+        return int(float(property_type)) not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+    except:
+        return True
 
 # df["flag_property_type"] = df["Property Type"].apply(validate_property_type)
 
