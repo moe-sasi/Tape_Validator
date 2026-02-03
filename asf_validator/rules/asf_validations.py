@@ -1807,11 +1807,129 @@ def validate_interest_type_indicator(interest_type_indicator):
     except:
         return True
 
+# 120. ARM Fields Populated for Fixed-Rate Loans
+# Flag if any ARM-related fields are populated when Amortization Type is 1 (Fixed)
+def validate_arm_fields_populated_for_fixed_rate(
+    amortization_type,
+    arm_look_back_days,
+    gross_margin,
+    arm_round_flag,
+    arm_round_factor,
+    index_type,
+    initial_fixed_rate_period,
+    initial_interest_rate_cap_change_up,
+    initial_interest_rate_cap_change_down,
+    subsequent_interest_rate_reset_period,
+    subsequent_interest_rate_cap_change_down,
+    subsequent_interest_rate_cap_change_up,
+    lifetime_max_rate_ceiling,
+    lifetime_min_rate_floor,
+    negative_amortization_limit,
+    initial_negative_amortization_recast_period,
+    subsequent_negative_amortization_recast_period,
+    initial_fixed_payment_period,
+    subsequent_payment_reset_period,
+    initial_periodic_payment_cap,
+    subsequent_periodic_payment_cap,
+    initial_minimum_payment_reset_period,
+    subsequent_minimum_payment_reset_period,
+    option_arm_indicator,
+):
+    """
+    Returns True if Amortization Type is 1 and any ARM-only field is populated.
+    Treats blank, NaN, and zero values as not populated.
+    """
+    try:
+        if amortization_type in ["", None]:
+            return False
+        if pd.isna(amortization_type):
+            return False
+        if int(float(amortization_type)) != 1:
+            return False
+
+        def is_populated(value):
+            if value in ["", None]:
+                return False
+            try:
+                if pd.isna(value):
+                    return False
+            except:
+                pass
+            if isinstance(value, str):
+                if value.strip() == "":
+                    return False
+                try:
+                    return float(value) != 0
+                except:
+                    return True
+            try:
+                return float(value) != 0
+            except:
+                return True
+
+        fields = [
+            arm_look_back_days,
+            gross_margin,
+            arm_round_flag,
+            arm_round_factor,
+            index_type,
+            initial_fixed_rate_period,
+            initial_interest_rate_cap_change_up,
+            initial_interest_rate_cap_change_down,
+            subsequent_interest_rate_reset_period,
+            subsequent_interest_rate_cap_change_down,
+            subsequent_interest_rate_cap_change_up,
+            lifetime_max_rate_ceiling,
+            lifetime_min_rate_floor,
+            negative_amortization_limit,
+            initial_negative_amortization_recast_period,
+            subsequent_negative_amortization_recast_period,
+            initial_fixed_payment_period,
+            subsequent_payment_reset_period,
+            initial_periodic_payment_cap,
+            subsequent_periodic_payment_cap,
+            initial_minimum_payment_reset_period,
+            subsequent_minimum_payment_reset_period,
+            option_arm_indicator,
+        ]
+        return any(is_populated(value) for value in fields)
+    except:
+        return True
+
+# 121. Application Received vs First Payment Date
+# Flag if Application Received Date and First Payment Date are 2+ years apart
+def validate_application_received_vs_first_payment(
+    application_received_date,
+    first_payment_date_of_loan,
+):
+    """
+    Returns True if Application Received Date and First Payment Date are 2 or more years apart.
+    Uses absolute difference to catch either direction.
+    """
+    try:
+        if application_received_date in ["", None] or first_payment_date_of_loan in ["", None]:
+            return False
+
+        app_dt = pd.to_datetime(application_received_date)
+        first_pay_dt = pd.to_datetime(first_payment_date_of_loan)
+        if pd.isna(app_dt) or pd.isna(first_pay_dt):
+            return False
+
+        return (
+            first_pay_dt >= app_dt + pd.DateOffset(years=2)
+            or first_pay_dt <= app_dt - pd.DateOffset(years=2)
+        )
+    except:
+        return True
+
+# df["flag_application_received_vs_first_payment"] = df.apply(
+#     lambda row: validate_application_received_vs_first_payment(
+#         row["Application Received Date"],
+#         row["First Payment Date of Loan"],
+#     ),
+#     axis=1,
+# )
+
 __all__ = [name for name, value in globals().items() if name.startswith("validate_") and callable(value)]
 if "pmt" in globals():
     __all__.append("pmt")
-
-# TO do
-# Check to make sure ARM-related fields are not present for fixed-rate loans
-# Application Received Date of 2024 but the first payment date is in 2026:
-

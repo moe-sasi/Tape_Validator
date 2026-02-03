@@ -47,6 +47,8 @@ _VARARGS_RULE_COLUMNS = {
     ]
 }
 
+_ALLOW_MISSING_PARAM_RULES = {"validate_arm_fields_populated_for_fixed_rate"}
+
 _CANONICAL_REPLACEMENTS = {
     "yrs": "years",
     "yr": "year",
@@ -155,25 +157,37 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
         else:
             columns = []
             missing = []
+            param_columns: list[str | None] = []
             for param in params:
                 resolved = _resolve_param_name(param.name, normalized_map, canonical_map)
                 if resolved is None:
                     missing.append(param.name)
+                    param_columns.append(None)
                 else:
                     columns.append(resolved)
+                    param_columns.append(resolved)
             if missing:
-                skipped_rules.append(
-                    {
-                        "rule": rule_name,
-                        "reason": "missing_columns",
-                        "missing_columns": ", ".join(missing),
-                    }
-                )
-                continue
+                if rule_name in _ALLOW_MISSING_PARAM_RULES:
+                    missing = []
+                else:
+                    skipped_rules.append(
+                        {
+                            "rule": rule_name,
+                            "reason": "missing_columns",
+                            "missing_columns": ", ".join(missing),
+                        }
+                    )
+                    continue
 
         def apply_rule(row: pd.Series) -> bool:
             try:
-                values = [row[col] for col in columns]
+                if varargs:
+                    values = [row[col] for col in columns]
+                else:
+                    values = [
+                        row[col] if col is not None else None
+                        for col in param_columns
+                    ]
                 return bool(func(*values))
             except Exception:  # pragma: no cover - defensive
                 return True
