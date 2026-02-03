@@ -9,6 +9,7 @@ from typing import Iterable
 import pandas as pd
 
 from asf_validator.rules import get_validations_registry
+from asf_validator.rules.asf_validations import _is_blank
 from asf_validator.util import normalize_columns
 
 _LOGGER = logging.getLogger(__name__)
@@ -181,6 +182,41 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
                         }
                     )
                     continue
+
+        if rule_name == "validate_missing_required_fields" and not varargs:
+            display_columns = []
+            for param, resolved in zip(params, param_columns):
+                if resolved is None:
+                    display_columns.append(_PARAM_ALIASES.get(param.name, param.name))
+                else:
+                    display_columns.append(resolved)
+
+            def collect_missing_required(row: pd.Series) -> list[str]:
+                missing_columns: list[str] = []
+                for resolved, display in zip(param_columns, display_columns):
+                    value = row[resolved] if resolved is not None else None
+                    if _is_blank(value):
+                        missing_columns.append(display)
+                return missing_columns
+
+            missing_per_row = tape_df.apply(collect_missing_required, axis=1)
+            issue_mask = missing_per_row.apply(bool)
+            issue_count = int(issue_mask.sum())
+            rule_summary.append({"rule": rule_name, "issue_count": issue_count})
+
+            if issue_count == 0:
+                continue
+
+            for row_index in missing_per_row[issue_mask].index:
+                record: dict[str, object] = {
+                    "rule": rule_name,
+                    "row_index": row_index,
+                    "columns": ", ".join(missing_per_row.at[row_index]),
+                }
+                if loan_number_column:
+                    record["loan_number"] = tape_df.at[row_index, loan_number_column]
+                issues.append(record)
+            continue
 
         def apply_rule(row: pd.Series) -> bool:
             try:
