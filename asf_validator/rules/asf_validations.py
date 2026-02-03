@@ -4,12 +4,160 @@ import pandas as pd
 import numpy as np
 import pdb # For debugging purposes
 
-# Originator Doc Code
-def validate_originator_doc_code(originator_doc_code):
+
+def _is_blank(value):
+    if value is None:
+        return True
+    try:
+        if pd.isna(value):
+            return True
+    except Exception:
+        pass
+    if isinstance(value, str):
+        return value.strip() == ""
+    return False
+
+
+def validate_missing_required_fields(
+    originator_doc_code,
+    primary_servicer,
+    servicing_fee,
+    originator,
+    loan_number,
+    amortization_type,
+    lien_position,
+    heloc_indicator,
+    loan_purpose,
+    cash_out_amount,
+    channel,
+    escrow_indicator,
+    origination_date,
+    original_loan_amount,
+    original_interest_rate,
+    original_amortization_term,
+    original_term_to_maturity,
+    first_payment_date_of_loan,
+    interest_type_indicator,
+    current_loan_amount,
+    current_interest_rate,
+    current_payment_amount_due,
+    interest_paid_through_date,
+    current_payment_status,
+    primary_borrower_id,
+    number_of_mortgaged_properties,
+    total_number_of_borrowers,
+    self_employment_flag,
+    current_other_monthly_payment,
+    length_of_employment_borrower,
+    years_in_home,
+    fico_model_used,
+    original_primary_borrower_fico,
+    most_recent_12_month_pay_history,
+    primary_borrower_wage_income,
+    co_borrower_wage_income,
+    primary_borrower_other_income,
+    co_borrower_other_income,
+    all_borrower_wage_income,
+    all_borrower_total_income,
+    _4506_t_indicator,
+    borrower_income_verification_level,
+    borrower_employment_verification,
+    borrower_asset_verification,
+    liquid_cash_reserves,
+    monthly_debt_all_borrowers,
+    originator_dti,
+    percentage_of_down_payment_from_borrower_own_funds,
+    city,
+    state,
+    postal_code,
+    property_type,
+    occupancy,
+    original_appraised_property_value,
+    original_property_valuation_type,
+    original_property_valuation_date,
+    original_cltv,
+    original_ltv,
+    borrower_years_in_industry,
+    coborrower_years_in_industry,
+    maturity_date,
+    loan_type_ls,
+    atrqm_status,
+    application_received_date,
+    dd_firm,
+    dd_review_type,
+):
     """
-    Returns True if the Originator Doc Code is missing (blank), indicating a validation error.
+    Returns True if any required field is blank (empty, None, NaN, or whitespace).
     """
-    return originator_doc_code == ""
+    required_values = [
+        originator_doc_code,
+        primary_servicer,
+        servicing_fee,
+        originator,
+        loan_number,
+        amortization_type,
+        lien_position,
+        heloc_indicator,
+        loan_purpose,
+        cash_out_amount,
+        channel,
+        escrow_indicator,
+        origination_date,
+        original_loan_amount,
+        original_interest_rate,
+        original_amortization_term,
+        original_term_to_maturity,
+        first_payment_date_of_loan,
+        interest_type_indicator,
+        current_loan_amount,
+        current_interest_rate,
+        current_payment_amount_due,
+        interest_paid_through_date,
+        current_payment_status,
+        primary_borrower_id,
+        number_of_mortgaged_properties,
+        total_number_of_borrowers,
+        self_employment_flag,
+        current_other_monthly_payment,
+        length_of_employment_borrower,
+        years_in_home,
+        fico_model_used,
+        original_primary_borrower_fico,
+        most_recent_12_month_pay_history,
+        primary_borrower_wage_income,
+        co_borrower_wage_income,
+        primary_borrower_other_income,
+        co_borrower_other_income,
+        all_borrower_wage_income,
+        all_borrower_total_income,
+        _4506_t_indicator,
+        borrower_income_verification_level,
+        borrower_employment_verification,
+        borrower_asset_verification,
+        liquid_cash_reserves,
+        monthly_debt_all_borrowers,
+        originator_dti,
+        percentage_of_down_payment_from_borrower_own_funds,
+        city,
+        state,
+        postal_code,
+        property_type,
+        occupancy,
+        original_appraised_property_value,
+        original_property_valuation_type,
+        original_property_valuation_date,
+        original_cltv,
+        original_ltv,
+        borrower_years_in_industry,
+        coborrower_years_in_industry,
+        maturity_date,
+        loan_type_ls,
+        atrqm_status,
+        application_received_date,
+        dd_firm,
+        dd_review_type,
+    ]
+    return any(_is_blank(value) for value in required_values)
 
 # Originator DTI
 def validate_originator_dti(originator_dti):
@@ -96,13 +244,6 @@ def validate_channel(channel):
     Returns True if Channel is not 1, 2, or 5 (as number or string).
     """
     return str(int(channel)) not in {"1", "2", "5"}
-
-# City
-def validate_city(city):
-    """
-    Returns True if City is blank.
-    """
-    return city == ""
 
 # 9. CLTV < LTV
 def validate_cltv_less_than_ltv(original_cltv, original_ltv):
@@ -205,16 +346,6 @@ def validate_original_interest_rate(original_interest_rate, lifetime_max_rate_ce
         return True
 # df["flag_original_interest_rate"] = df.apply(lambda row: validate_original_interest_rate(row["Original Interest Rate"], row["Lifetime Maximum Rate (Ceiling)"], row["Amortization Type"]), axis=1)
 
-# 14. Primary Servicer
-# Flag if Primary Servicer is blank
-def validate_primary_servicer(primary_servicer):
-    """
-    Returns True if Primary Servicer is missing (blank).
-    """
-    return primary_servicer == ""
-
-# df["flag_primary_servicer"] = df["Primary Servicer"].apply(validate_primary_servicer)
-
 # 16. DTI Consistency
 # Flag if DTI differs significantly from calculated monthly debt / income ratio
 def validate_dti_consistency(originator_dti, monthly_debt_all_borrowers, all_borrower_total_income):
@@ -228,26 +359,6 @@ def validate_dti_consistency(originator_dti, monthly_debt_all_borrowers, all_bor
         return True
 
 # df["flag_dti_consistency"] = df.apply(lambda row: validate_dti_consistency(row["Originator DTI"], row["Monthly Debt All Borrowers"], row["All Borrower Total Income"]), axis=1)
-
-# 17. Escrow Indicator
-# Flag if Escrow Indicator is blank
-def validate_escrow_indicator(escrow_indicator):
-    """
-    Returns True if Escrow Indicator is missing (blank).
-    """
-    return escrow_indicator == ""
-
-# df["flag_escrow_indicator"] = df["Escrow Indicator"].apply(validate_escrow_indicator)
-
-# 18. FICO Model Used
-# Flag if FICO Model Used is blank
-def validate_fico_model_used(fico_model_used):
-    """
-    Returns True if FICO Model Used is missing (blank).
-    """
-    return fico_model_used == ""
-
-# df["flag_fico_model_used"] = df["FICO Model Used"].apply(validate_fico_model_used)
 
 # 18A. FICO Score Range By Model Used
 # Flag if FICO score is outside the allowable range for the specified model.
@@ -414,81 +525,9 @@ def validate_lifetime_min_rate_floor(gross_margin, lifetime_min_rate_floor, amor
 
 # df["flag_lifetime_min_rate_floor"] = df.apply(lambda row: validate_lifetime_min_rate_floor(row["Gross Margin"], row["Lifetime Minimum Rate (Floor)"], row["Amortization Type"]), axis=1)
 
-# 28. Missing Loan Purpose
-# Flag if Loan Purpose is blank
-def validate_loan_purpose(loan_purpose):
-    """
-    Returns True if Loan Purpose is missing (blank).
-    """
-    return loan_purpose == ""
-
-# df["flag_loan_purpose"] = df["Loan Purpose"].apply(validate_loan_purpose)
-
 # 29. Missing Sales Price (for HELOC)
 # Flag if HELOC Indicator = 7 and Sales Price is blank or zero
 def validate_sales_price_for_heloc(heloc_indicator, sales_price):
-    """
-    Returns True if HELOC Indicator is 7 and Sales Price is blank or zero.
-    """
-    return heloc_indicator == 7 and sales_price in ["", 0, None]
-
-# df["flag_sales_price_for_heloc"] = df.apply(lambda row: validate_sales_price_for_heloc(row["HELOC Indicator"], row["Sales Price"]), axis=1)
-
-
-# 25. Lien Status
-# Flag if Lien Position is not 1 or 2
-def validate_lien_position_v2(lien_position):
-    """
-    Returns True if Lien Position is not 1 or 2.
-    """
-    try:
-        return int(lien_position) not in [1, 2]
-    except:
-        return True
-
-# df["flag_lien_position"] = df["Lien Position"].apply(validate_lien_position)
-
-# 26. Lifetime Maximum Rate (Ceiling)
-# Flag if Lifetime Maximum Rate is blank when Amortization Type is 2 (ARM)
-def validate_lifetime_max_rate_ceiling_v2(lifetime_max_rate_ceiling, amortization_type):
-    """
-    Returns True if Lifetime Maximum Rate (Ceiling) is blank and Amortization Type is 2.
-    """
-    return lifetime_max_rate_ceiling == "" and amortization_type == 2
-
-# df["flag_lifetime_max_rate_ceiling"] = df.apply(lambda row: validate_lifetime_max_rate_ceiling(row["Lifetime Maximum Rate (Ceiling)"], row["Amortization Type"]), axis=1)
-
-# 27. Lifetime Minimum Rate (Floor)
-# Flag if Lifetime Floor is blank, zero, or less than Margin when Amortization Type is 2
-def validate_lifetime_min_rate_floor_v2(gross_margin, lifetime_min_rate_floor, amortization_type):
-    """
-    Returns True if:
-    - Amortization Type is 2, AND
-    - Lifetime Minimum Rate is blank, 0, or less than the Gross Margin.
-    """
-    try:
-        return amortization_type == 2 and (
-            lifetime_min_rate_floor in ["", 0, None] or
-            float(gross_margin) > float(lifetime_min_rate_floor)
-        )
-    except:
-        return True
-
-# df["flag_lifetime_min_rate_floor"] = df.apply(lambda row: validate_lifetime_min_rate_floor(row["Gross Margin"], row["Lifetime Minimum Rate (Floor)"], row["Amortization Type"]), axis=1)
-
-# 28. Missing Loan Purpose
-# Flag if Loan Purpose is blank
-def validate_loan_purpose_v2(loan_purpose):
-    """
-    Returns True if Loan Purpose is missing (blank).
-    """
-    return loan_purpose == ""
-
-# df["flag_loan_purpose"] = df["Loan Purpose"].apply(validate_loan_purpose)
-
-# 29. Missing Sales Price (for HELOC)
-# Flag if HELOC Indicator = 7 and Sales Price is blank or zero
-def validate_sales_price_for_heloc_v2(heloc_indicator, sales_price):
     """
     Returns True if HELOC Indicator is 7 and Sales Price is blank or zero.
     """
@@ -544,16 +583,6 @@ def validate_number_of_mortgaged_properties(number_of_mortgaged_properties, loan
 
 # df["flag_number_of_mortgaged_properties"] = df["Number of Mortgaged Properties"].apply(validate_number_of_mortgaged_properties)
 
-# 39. Occupancy
-# Flag if Occupancy field is blank
-def validate_occupancy(occupancy):
-    """
-    Returns True if Occupancy is missing (blank).
-    """
-    return occupancy == ""
-
-# df["flag_occupancy"] = df["Occupancy"].apply(validate_occupancy)
-
 # 40. Original Appraised Property Value
 # Flag if Original Appraised Property Value is missing or less than Current Loan Amount
 def validate_original_appraised_property_value(original_appraised_property_value, current_loan_amount):
@@ -566,14 +595,6 @@ def validate_original_appraised_property_value(original_appraised_property_value
         return True
 
 # df["flag_original_appraised_value"] = df.apply(lambda row: validate_original_appraised_property_value(row["Original Appraised Property Value"], row["Current Loan Amount"]), axis=1)
-
-# 41. Original Balance
-# Flag if Original Loan Amount is blank or zero
-def validate_original_loan_amount(original_loan_amount):
-    """
-    Returns True if Original Loan Amount is blank or zero.
-    """
-    return original_loan_amount in ["", 0, None]
 
 # 41a. Original Loan Amount Range
 # Flag if Original Loan Amount is < 10,000 or > 10,000,000
@@ -612,16 +633,6 @@ def validate_original_ltv(original_loan_amount, sales_price, original_appraised_
 
 # df["flag_original_ltv"] = df.apply(lambda row: validate_original_ltv(row["Original Loan Amount"], row["Sales Price"], row["Original Appraised Property Value"], row["Original LTV"]), axis=1)
 
-# 43. Original Property Valuation Date is Missing
-# Flag if Original Property Valuation Date is blank
-def validate_original_property_valuation_date(original_property_valuation_date):
-    """
-    Returns True if Original Property Valuation Date is blank.
-    """
-    return pd.isna(original_property_valuation_date) or  (original_property_valuation_date in ("", None))
-
-# df["flag_original_property_valuation_date"] = df["Original Property Valuation Date"].apply(validate_original_property_valuation_date)
-
 # 44. 180 Days Between Valuation and Origination
 # Flag if more than 180 days between Original Property Valuation Date and Origination Date
 def validate_valuation_age(original_property_valuation_date, origination_date):
@@ -648,16 +659,6 @@ def validate_valuation_after_origination(original_property_valuation_date, origi
         return True
 
 # df["flag_valuation_after_origination"] = df.apply(lambda row: validate_valuation_after_origination(row["Original Property Valuation Date"], row["Origination Date"]), axis=1)
-
-# 46. Original Property Valuation Type
-# Flag if Original Property Valuation Type is missing
-def validate_original_property_valuation_type(original_property_valuation_type):
-    """
-    Returns True if Original Property Valuation Type is blank.
-    """
-    return  pd.isna(original_property_valuation_type) or  (original_property_valuation_type == "")
-
-# df["flag_original_property_valuation_type"] = df["Original Property Valuation Type"].apply(validate_original_property_valuation_type)
 
 # 46a. Original Appraisal 24+ months old
 # Flag if Original Property Valuation Date is 24 months or older than Interest Paid Through Date
@@ -799,16 +800,6 @@ def validate_origination_date(origination_date):
 
 # df["flag_origination_date"] = df["Origination Date"].apply(validate_origination_date)
 
-# 49. Originator
-# Flag if Originator field is blank
-def validate_originator(originator):
-    """
-    Returns True if Originator is blank.
-    """
-    return originator == ""
-
-# df["flag_originator"] = df["Originator"].apply(validate_originator)
-
 # # 50. Property Valuation After Origination
 # # Flag if Property Valuation Date is after Origination Date
 # def validate_valuation_after_origination(original_property_valuation_date, origination_date):
@@ -852,36 +843,6 @@ def validate_original_term(original_term_to_maturity, original_amortization_term
         return True
 
 # df["flag_original_term"] = df.apply(lambda row: validate_original_term(row["Original Term to Maturity"], row["Original Amortization Term"]), axis=1)
-
-# 53. Origination Date
-# Flag if Origination Date is zero
-def validate_origination_date_v2(origination_date):
-    """
-    Returns True if Origination Date is zero.
-    """
-    return origination_date == 0
-
-# df["flag_origination_date"] = df["Origination Date"].apply(validate_origination_date)
-
-# 54. Originator
-# Flag if Originator field is blank
-def validate_originator_v2(originator):
-    """
-    Returns True if Originator is blank.
-    """
-    return originator == ""
-
-# df["flag_originator"] = df["Originator"].apply(validate_originator)
-
-# 55. Payment String
-# Flag if Current Payment Status is blank
-def validate_current_payment_status(current_payment_status):
-    """
-    Returns True if Current Payment Status is blank.
-    """
-    return current_payment_status == ""
-
-# df["flag_current_payment_status"] = df["Current Payment Status"].apply(validate_current_payment_status)
 
 # 56. Percent of Down Payment
 # Complex rule involving Loan Purpose and % Down Payment
@@ -1002,16 +963,6 @@ def validate_prepayment_term(amortization_type, prepayment_penalty_total_term):
 
 # df["flag_prepayment_term"] = df.apply(lambda row: validate_prepayment_term(row["Amortization Type"], row["Prepayment Penalty Total Term"]), axis=1)
 
-# 63. Primary Borrower Other Income
-# Flag if Primary Borrower Other Income is blank
-def validate_primary_borrower_other_income(primary_borrower_other_income):
-    """
-    Returns True if Primary Borrower Other Income is blank.
-    """
-    return primary_borrower_other_income == ""
-
-# df["flag_primary_borrower_other_income"] = df["Primary Borrower Other Income"].apply(validate_primary_borrower_other_income)
-
 # 64. Initial Period Cap
 # Flag if either Initial Cap Up or Down is blank when Amortization Type is 2
 def validate_initial_period_cap(amortization_type, cap_down, cap_up):
@@ -1037,16 +988,6 @@ def validate_property_type(property_type):
         return True
 
 # df["flag_property_type"] = df["Property Type"].apply(validate_property_type)
-
-# 66. Original Appraised Property Value
-# Flag if Original Appraised Property Value is blank or zero
-def validate_original_appraised_value(original_appraised_property_value):
-    """
-    Returns True if Original Appraised Property Value is blank or zero.
-    """
-    return original_appraised_property_value in ["", 0, None]
-
-# df["flag_original_appraised_value"] = df["Original Appraised Property Value"].apply(validate_original_appraised_value)
 
 # 67. Scheduled UPB
 # Flag if Current Loan Amount is blank, zero, or exceeds Original Loan Amount
@@ -1195,16 +1136,6 @@ def validate_total_number_of_borrowers(total_number_of_borrowers):
 
 # df["flag_total_number_of_borrowers"] = df["Total Number of Borrowers"].apply(validate_total_number_of_borrowers)
 
-# 78. UPB
-# Flag if Current Loan Amount is blank
-def validate_upb(current_loan_amount):
-    """
-    Returns True if Current Loan Amount is blank.
-    """
-    return current_loan_amount == ""
-
-# df["flag_upb"] = df["Current Loan Amount"].apply(validate_upb)
-
 # 79. Liquid Reserves
 # Flag if reserves are blank/zero and loan type does not include 'CLOSED END SECOND'
 def validate_liquid_reserves(liquid_cash_reserves, loan_type_ls):
@@ -1249,26 +1180,6 @@ def validate_zip_code(postal_code):
 
 # Validations #50 through #80 are already present above.
 
-# 81. Borrower Years In Industry
-# Flag if Borrower Years in Industry is blank
-def validate_borrower_years_in_industry(borrower_years_in_industry):
-    """
-    Returns True if Borrower Years in Industry is blank.
-    """
-    return borrower_years_in_industry == ""
-
-# df["flag_borrower_years_in_industry"] = df["Borrower - Yrs at in Industry"].apply(validate_borrower_years_in_industry)
-
-# 82. Original Price
-# Flag if Original Appraised Property Value is blank
-def validate_original_price(original_appraised_property_value):
-    """
-    Returns True if Original Appraised Property Value is blank.
-    """
-    return original_appraised_property_value == ""
-
-# df["flag_original_price"] = df["Original Appraised Property Value"].apply(validate_original_price)
-
 # 83. All Borrower Total Income
 # Flag if All Borrower Total Income is blank or <= 0
 def validate_all_borrower_total_income(all_borrower_total_income):
@@ -1295,36 +1206,6 @@ def validate_all_borrower_wage_income(pbw, cbw, abw):
         return True
 
 # df["flag_all_borrower_wage_income"] = df.apply(lambda row: validate_all_borrower_wage_income(row["Primary Borrower Wage Income"], row["Co-Borrower Wage Income"], row["All Borrower Wage Income"]), axis=1)
-
-# 85. Borrower Income Verification Level
-# Flag if Borrower Income Verification Level is blank
-def validate_borrower_income_verification(borrower_income_verification_level):
-    """
-    Returns True if Borrower Income Verification Level is blank.
-    """
-    return borrower_income_verification_level == ""
-
-# df["flag_borrower_income_verification"] = df["Borrower Income Verification Level"].apply(validate_borrower_income_verification)
-
-# 86. Borrower Employment Verification
-# Flag if Borrower Employment Verification is blank
-def validate_borrower_employment_verification(borrower_employment_verification):
-    """
-    Returns True if Borrower Employment Verification is blank.
-    """
-    return borrower_employment_verification == ""
-
-# df["flag_borrower_employment_verification"] = df["Borrower Employment Verification"].apply(validate_borrower_employment_verification)
-
-# 87. Borrower Asset Verification
-# Flag if Borrower Asset Verification is blank
-def validate_borrower_asset_verification(borrower_asset_verification):
-    """
-    Returns True if Borrower Asset Verification is blank.
-    """
-    return borrower_asset_verification == ""
-
-# df["flag_borrower_asset_verification"] = df["Borrower Asset Verification"].apply(validate_borrower_asset_verification)
 
 # 88. Junior Drawn Amount
 # Flag if Junior Mortgage Drawn Amount > Junior Mortgage Balance
@@ -1558,16 +1439,6 @@ def validate_property_address(property_address):
     return property_address == ""
 
 # df["flag_property_address"] = df["Property Address"].apply(validate_property_address)
-
-# 102. Seller Loan Number
-# Flag if Seller Loan Number is blank
-def validate_seller_loan_number_field(seller_loan_number):
-    """
-    Returns True if Seller Loan Number is blank.
-    """
-    return seller_loan_number == ""
-
-# df["flag_seller_loan_number"] = df["Seller Loan Number"].apply(validate_seller_loan_number_field)
 
 # 103. Lien Position
 # Flag if Lien Position is 2 and Loan Type does not contain 'SECOND'

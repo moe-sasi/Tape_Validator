@@ -47,7 +47,10 @@ _VARARGS_RULE_COLUMNS = {
     ]
 }
 
-_ALLOW_MISSING_PARAM_RULES = {"validate_arm_fields_populated_for_fixed_rate"}
+_ALLOW_MISSING_PARAM_RULES = {
+    "validate_arm_fields_populated_for_fixed_rate",
+    "validate_missing_required_fields",
+}
 
 _CANONICAL_REPLACEMENTS = {
     "yrs": "years",
