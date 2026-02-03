@@ -13,5 +13,11 @@ def read_tape(tape_path: Path) -> pd.DataFrame:
     Placeholder implementation reads CSV or Excel based on suffix.
     """
     if tape_path.suffix.lower() in {".xls", ".xlsx"}:
-        return pd.read_excel(tape_path)
-    return pd.read_csv(tape_path)
+        df = pd.read_excel(tape_path)
+    else:
+        df = pd.read_csv(tape_path)
+
+    if "Loan Number" in df.columns:
+        df = df[df["Loan Number"].notna()].copy()
+
+    return df
