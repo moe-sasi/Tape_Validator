@@ -95,7 +95,7 @@ def validate_channel(channel):
     """
     Returns True if Channel is not 1, 2, or 5 (as number or string).
     """
-    return str(channel) not in {"1", "2", "5"}
+    return str(int(channel)) not in {"1", "2", "5"}
 
 # City
 def validate_city(city):
@@ -1396,6 +1396,9 @@ def validate_application_date(application_received_date, origination_date):
     from datetime import datetime
     import pandas as pd
     
+    orig_arc = application_received_date
+    orig_od = origination_date
+
     application_received_date = pd.to_datetime(application_received_date)
     origination_date = pd.to_datetime(origination_date)
     try:
@@ -1644,11 +1647,11 @@ def validate_age_zero_current_balance_diff(
         paid_through_dt = pd.to_datetime(interest_paid_through_date)
         if pd.isna(maturity_dt) or pd.isna(paid_through_dt):
             return True
-
         months_between = (maturity_dt.year - paid_through_dt.year) * 12 + (
             maturity_dt.month - paid_through_dt.month
         )
         age = float(original_amortization_term) - months_between
+        
         if round(age, 6) == 0:
             return float(current_loan_amount) != float(original_loan_amount)
         return False
@@ -1791,6 +1794,24 @@ def validate_refi_with_less_than_1_year_in_home(loan_purpose, years_in_home, occ
     except:
         return True
 
+# 119. Interest Type Indicator
+# Flag if Interest Type Indicator is not 2
+def validate_interest_type_indicator(interest_type_indicator):
+    """
+    Returns True if Interest Type Indicator is not 2.
+    """
+    try:
+        if interest_type_indicator in ["", None] or pd.isna(interest_type_indicator):
+            return True
+        return int(float(interest_type_indicator)) != 2
+    except:
+        return True
+
 __all__ = [name for name, value in globals().items() if name.startswith("validate_") and callable(value)]
 if "pmt" in globals():
     __all__.append("pmt")
+
+# TO do
+# Check to make sure ARM-related fields are not present for fixed-rate loans
+# Application Received Date of 2024 but the first payment date is in 2026:
+
