@@ -245,6 +245,16 @@ def validate_channel(channel):
     """
     return str(int(channel)) not in {"1", "2", "5"}
 
+# Amortization Type Check
+def validate_amortization_type(amortization_type):
+    """
+    Returns True if Amortization Type is not 1 or 2.
+    """
+    try:
+        return int(float(amortization_type)) not in (1, 2)
+    except:
+        return True
+
 # 9. CLTV < LTV
 def validate_cltv_less_than_ltv(original_cltv, original_ltv):
     """
@@ -449,12 +459,12 @@ def validate_index_type(index_type, amortization_type):
 def validate_length_employment_borrower(length_of_employment_borrower, borrower_employment_verification, self_employment_flag):
     """
     Returns True if:
-    - Employment length is blank or 0,
+    - Employment length is blank,
     - AND Employment verification level is 3,
     - AND borrower is not self-employed.
     """
     return (
-        length_of_employment_borrower in ["", 0, None] and
+        length_of_employment_borrower in ["", None] and
         borrower_employment_verification == 3 and
         self_employment_flag == 0
     )
@@ -525,15 +535,53 @@ def validate_lifetime_min_rate_floor(gross_margin, lifetime_min_rate_floor, amor
 
 # df["flag_lifetime_min_rate_floor"] = df.apply(lambda row: validate_lifetime_min_rate_floor(row["Gross Margin"], row["Lifetime Minimum Rate (Floor)"], row["Amortization Type"]), axis=1)
 
+# 28. Gross Margin > Lifetime Maximum Rate (Ceiling)
+# Flag if Gross Margin exceeds the Lifetime Maximum Rate (Ceiling) when Amortization Type is 2 (ARM)
+def validate_gross_margin_gt_lifetime_max_rate(gross_margin, lifetime_max_rate_ceiling, amortization_type):
+    """
+    Returns True if:
+    - Amortization Type is 2, AND
+    - Gross Margin is greater than Lifetime Maximum Rate (Ceiling).
+    """
+    try:
+        if amortization_type in ["", None] or pd.isna(amortization_type):
+            return False
+        if int(float(amortization_type)) != 2:
+            return False
+        if gross_margin in ["", None] or pd.isna(gross_margin):
+            return False
+        if lifetime_max_rate_ceiling in ["", None] or pd.isna(lifetime_max_rate_ceiling):
+            return False
+        return float(gross_margin) > float(lifetime_max_rate_ceiling)
+    except:
+        return True
+
+# df["flag_gross_margin_gt_lifetime_max_rate"] = df.apply(lambda row: validate_gross_margin_gt_lifetime_max_rate(row["Gross Margin"], row["Lifetime Maximum Rate (Ceiling)"], row["Amortization Type"]), axis=1)
+
 # 29. Missing Sales Price (for HELOC)
 # Flag if HELOC Indicator = 7 and Sales Price is blank or zero
-def validate_sales_price_for_heloc(heloc_indicator, sales_price):
-    """
-    Returns True if HELOC Indicator is 7 and Sales Price is blank or zero.
-    """
-    return heloc_indicator == 7 and sales_price in ["", 0, None]
-
+# def validate_sales_price_for_heloc(heloc_indicator, sales_price):
+#     """
+#     Returns True if HELOC Indicator is 7 and Sales Price is blank or zero.
+#     """
+#     return heloc_indicator == 7 and sales_price in ["", 0, None]
+#
 # df["flag_sales_price_for_heloc"] = df.apply(lambda row: validate_sales_price_for_heloc(row["HELOC Indicator"], row["Sales Price"]), axis=1)
+
+# 29A. HELOC Indicator Must Be 0
+# Flag if HELOC Indicator is anything other than 0
+def validate_heloc_indicator_zero(heloc_indicator):
+    """
+    Returns True if HELOC Indicator is not 0 (including blanks).
+    """
+    try:
+        if heloc_indicator in ["", None] or pd.isna(heloc_indicator):
+            return True
+        return float(heloc_indicator) != 0
+    except:
+        return True
+
+# df["flag_heloc_indicator_zero"] = df["HELOC Indicator"].apply(validate_heloc_indicator_zero)
 
 
 # 35. Monthly Debt All Borrowers
@@ -570,6 +618,45 @@ def validate_mi_percent(mortgage_insurance_percent):
 
 # df["flag_mi_percent"] = df["Mortgage Insurance Percent"].apply(validate_mi_percent)
 
+# 37A. MI: Lender or Borrower Paid?
+# Flag if MI is present but paid-by value is invalid
+def validate_mi_lender_or_borrower_paid(
+    mi_lender_or_borrower_paid,
+    mortgage_insurance_company_name,
+    mortgage_insurance_percent,
+):
+    """
+    Returns True if Mortgage Insurance Company Name or Percent is populated and
+    MI: Lender or Borrower Paid? is not 1 (Borrower-Paid) or 2 (Lender-Paid).
+    """
+    try:
+        has_mi_company = not _is_blank(mortgage_insurance_company_name)
+        has_mi_percent = False
+        if not _is_blank(mortgage_insurance_percent):
+            try:
+                has_mi_percent = float(mortgage_insurance_percent) != 0
+            except:
+                has_mi_percent = True
+        if not (has_mi_company or has_mi_percent):
+            return False
+        if _is_blank(mi_lender_or_borrower_paid):
+            return True
+        value = float(mi_lender_or_borrower_paid)
+        if not value.is_integer():
+            return True
+        return int(value) not in (1, 2)
+    except:
+        return True
+
+# df["flag_mi_lender_or_borrower_paid"] = df.apply(
+#     lambda row: validate_mi_lender_or_borrower_paid(
+#         row["MI: Lender or Borrower Paid?"],
+#         row["Mortgage Insurance Company Name"],
+#         row["Mortgage Insurance Percent"],
+#     ),
+#     axis=1,
+# )
+
 # 38. Number of Mortgaged Properties
 # Flag if Number of Mortgaged Properties is blank or less than 1
 def validate_number_of_mortgaged_properties(number_of_mortgaged_properties, loan_purpose):
@@ -595,6 +682,36 @@ def validate_original_appraised_property_value(original_appraised_property_value
         return True
 
 # df["flag_original_appraised_value"] = df.apply(lambda row: validate_original_appraised_property_value(row["Original Appraised Property Value"], row["Current Loan Amount"]), axis=1)
+
+# 40A. Appraised Value <= $10,000
+# Flag if Original Appraised Property Value is less than or equal to 10,000
+def validate_appraised_value_at_or_below_10000(original_appraised_property_value):
+    """
+    Returns True if Original Appraised Property Value is less than or equal to 10,000.
+    """
+    try:
+        if _is_blank(original_appraised_property_value):
+            return False
+        return float(original_appraised_property_value) <= 10000
+    except:
+        return True
+
+# df["flag_appraised_value_at_or_below_10000"] = df["Original Appraised Property Value"].apply(validate_appraised_value_at_or_below_10000)
+
+# 40A. Appraised Value > $8,000,000 (Warning)
+# Warn if Original Appraised Property Value exceeds 8,000,000
+def validate_appraised_value_over_8000000(original_appraised_property_value):
+    """
+    Returns True if Original Appraised Property Value is greater than 8,000,000.
+    """
+    try:
+        if _is_blank(original_appraised_property_value):
+            return False
+        return float(original_appraised_property_value) > 8000000
+    except:
+        return True
+
+# df["warn_appraised_value_over_8000000"] = df["Original Appraised Property Value"].apply(validate_appraised_value_over_8000000)
 
 # 41a. Original Loan Amount Range
 # Flag if Original Loan Amount is < 10,000 or > 10,000,000
@@ -989,6 +1106,22 @@ def validate_property_type(property_type):
 
 # df["flag_property_type"] = df["Property Type"].apply(validate_property_type)
 
+# 66. Loan Purpose ID
+# Flag if Loan Purpose is blank or not an allowed value
+def validate_loan_purpose_id(loan_purpose):
+    """
+    Returns True if Loan Purpose is blank or not one of the allowed values.
+    Allowed values: 3, 6, 7, 9, 10.
+    """
+    try:
+        if _is_blank(loan_purpose):
+            return True
+        return int(float(loan_purpose)) not in {3, 6, 7, 9, 10}
+    except:
+        return True
+
+# df["flag_loan_purpose_id"] = df["Loan Purpose"].apply(validate_loan_purpose_id)
+
 # 67. Scheduled UPB
 # Flag if Current Loan Amount is blank, zero, or exceeds Original Loan Amount
 def validate_scheduled_upb(current_loan_amount, original_loan_amount):
@@ -1026,18 +1159,48 @@ def validate_purpose_id_vs_sales_price(loan_purpose, sales_price):
 # df["flag_purpose_id_vs_sales_price"] = df.apply(lambda row: validate_purpose_id_vs_sales_price(row["Loan Purpose"], row["Sales Price"], row["GQ"]), axis=1)
 
 # 69. First Rate Adjustment Frequency
-# Flag if Initial Fixed Rate Period is missing or not in allowed set for ARM
+# Flag if Initial Fixed Rate Period is missing or not in allowed range for ARM
 def validate_first_rate_adjustment_frequency(amortization_type, initial_fixed_rate_period):
     """
-    Returns True if Amortization Type is 2 and Initial Fixed Rate Period is missing or not in allowed values.
+    Returns True if Amortization Type is 2 and Initial Fixed Rate Period is missing or not in allowed range.
     """
-    valid_periods = {1, 6, 12, 24, 36, 60, 84, 120}
     try:
-        return amortization_type == 2 and (initial_fixed_rate_period == "" or int(initial_fixed_rate_period) not in valid_periods)
+        if _is_blank(amortization_type):
+            return False
+        if int(float(amortization_type)) != 2:
+            return False
+        if _is_blank(initial_fixed_rate_period):
+            return True
+        value = float(initial_fixed_rate_period)
+        if not value.is_integer():
+            return True
+        value = int(value)
+        return not (1 <= value <= 240)
     except:
         return True
 
 # df["flag_first_rate_adjustment_frequency"] = df.apply(lambda row: validate_first_rate_adjustment_frequency(row["Amortization Type"], row["Initial Fixed Rate Period"]), axis=1)
+
+# 69A. ARM Look-back Days
+# Flag if ARM Look-back Days is missing or not in allowed range for ARM
+def validate_arm_look_back_days(amortization_type, arm_look_back_days):
+    """
+    Returns True if Amortization Type is 2 and ARM Look-back Days is missing or not in 0-99 range.
+    """
+    try:
+        if amortization_type != 2:
+            return False
+        if arm_look_back_days == "" or arm_look_back_days is None:
+            return True
+        value = float(arm_look_back_days)
+        if not value.is_integer():
+            return True
+        value = int(value)
+        return not (0 <= value <= 99)
+    except:
+        return True
+
+# df["flag_arm_look_back_days"] = df.apply(lambda row: validate_arm_look_back_days(row["Amortization Type"], row["ARM Look-back Days"]), axis=1)
 
 # 70. Rounding Flag
 # Flag if ARM Round Flag is blank for adjustable-rate loans
@@ -1048,6 +1211,29 @@ def validate_rounding_flag(amortization_type, arm_round_flag):
     return amortization_type == 2 and arm_round_flag == ""
 
 # df["flag_rounding_flag"] = df.apply(lambda row: validate_rounding_flag(row["Amortization Type"], row["ARM Round Flag"]), axis=1)
+
+# 70A. ARM Round Flag Value
+# Flag if ARM Round Flag is not in allowed values for adjustable-rate loans
+def validate_arm_round_flag_value(amortization_type, arm_round_flag):
+    """
+    Returns True if Amortization Type is 2 and ARM Round Flag is not in {0, 1, 2, 3}.
+    Valid values: 0 = No Rounding, 1 = Up, 2 = Down, 3 = Nearest.
+    """
+    try:
+        if _is_blank(amortization_type):
+            return False
+        if int(float(amortization_type)) != 2:
+            return False
+        if _is_blank(arm_round_flag):
+            return False
+        value = float(arm_round_flag)
+        if not value.is_integer():
+            return True
+        return int(value) not in {0, 1, 2, 3}
+    except:
+        return True
+
+# df["flag_arm_round_flag_value"] = df.apply(lambda row: validate_arm_round_flag_value(row["Amortization Type"], row["ARM Round Flag"]), axis=1)
 
 
 # 71. Rounding Interval
@@ -1061,12 +1247,12 @@ def validate_rounding_interval(amortization_type, arm_round_factor):
 # df["flag_rounding_interval"] = df.apply(lambda row: validate_rounding_interval(row["Amortization Type"], row["ARM Round Factor"]), axis=1)
 
 # 72. Self Employed
-# Flag if Self-employment Flag is missing or not 0/1
+# Flag if Self-employment Flag is missing or not 0/1/99
 def validate_self_employed(self_employment_flag):
     """
-    Returns True if Self-employment Flag is blank or not 0 or 1.
+    Returns True if Self-employment Flag is blank or not 0, 1, or 99.
     """
-    return self_employment_flag == "" or self_employment_flag not in [0, 1]
+    return self_employment_flag == "" or self_employment_flag not in [0, 1, 99]
 
 # df["flag_self_employed"] = df["Self-employment Flag"].apply(validate_self_employed)
 
@@ -1136,18 +1322,59 @@ def validate_total_number_of_borrowers(total_number_of_borrowers):
 
 # df["flag_total_number_of_borrowers"] = df["Total Number of Borrowers"].apply(validate_total_number_of_borrowers)
 
-# 79. Liquid Reserves
-# Flag if reserves are blank/zero and loan type does not include 'CLOSED END SECOND'
-def validate_liquid_reserves(liquid_cash_reserves, loan_type_ls):
+# 78. Total Number of Borrowers > 4 (Warning)
+# Warn if Total Number of Borrowers is greater than 4
+def validate_total_number_of_borrowers_over_4(total_number_of_borrowers):
     """
-    Returns True if Liquid/Cash Reserves is blank or 0 and loan type does not contain 'CLOSED END SECOND'.
+    Returns True if Total Number of Borrowers is greater than 4.
     """
     try:
-        return liquid_cash_reserves in ["", 0, None] and "CLOSED END SECOND" not in str(loan_type_ls).upper()
+        if total_number_of_borrowers in ["", None]:
+            return False
+        return float(total_number_of_borrowers) > 4
+    except:
+        return False
+
+# df["warn_total_number_of_borrowers_over_4"] = df["Total Number of Borrowers"].apply(validate_total_number_of_borrowers_over_4)
+
+# 79. Liquid Reserves
+# Flag if reserves are blank/zero and loan type does not include 'CLOSED END SECOND' or 'AGENCY'
+def validate_liquid_reserves(liquid_cash_reserves, loan_type_ls):
+    """
+    Returns True if Liquid/Cash Reserves is blank or 0 and loan type does not contain
+    'CLOSED END SECOND' or 'AGENCY'.
+    """
+    try:
+        loan_type = str(loan_type_ls).upper()
+        return (
+            liquid_cash_reserves in ["", 0, None]
+            and "CLOSED END SECOND" not in loan_type
+            and "AGENCY" not in loan_type
+        )
     except:
         return True
 
 # df["flag_liquid_reserves"] = df.apply(lambda row: validate_liquid_reserves(row["Liquid / Cash Reserves"], row["LOAN_TYPE_LS"]), axis=1)
+
+# 79A. Zero Reserves for Primary/Second
+# Flag if Liquid / Cash Reserves is 0 and Occupancy is 1 (Primary) or 2 (Second Home)
+def validate_zero_reserves_primary_second(liquid_cash_reserves, occupancy):
+    """
+    Returns True if Liquid / Cash Reserves is 0 and Occupancy is 1 or 2.
+    """
+    try:
+        if _is_blank(liquid_cash_reserves) or _is_blank(occupancy):
+            return False
+        reserves = float(liquid_cash_reserves)
+        occ = int(float(occupancy))
+        return reserves == 0 and occ in (1, 2)
+    except:
+        return True
+
+# df["flag_zero_reserves_primary_second"] = df.apply(
+#     lambda row: validate_zero_reserves_primary_second(row["Liquid / Cash Reserves"], row["Occupancy"]),
+#     axis=1,
+# )
 
 # 80. Zip Code
 # Flag if Postal Code is not 5 digits
@@ -1293,6 +1520,31 @@ def validate_application_date(application_received_date, origination_date):
 
 # df["flag_application_date"] = df.apply(lambda row: validate_application_date(row["Application Received Date"], row["Origination Date"]), axis=1)
 
+# 92A. Application vs Note Date > 365 Days
+# Flag if Application Date and Note Date (Origination Date) are more than 365 days apart
+def validate_application_note_date_gap(application_received_date, origination_date):
+    """
+    Returns True if the absolute difference between Application Received Date and
+    Origination Date is greater than 365 days.
+    """
+    import pandas as pd
+
+    try:
+        if _is_blank(application_received_date) or _is_blank(origination_date):
+            return False
+        app_date = pd.to_datetime(application_received_date, errors="coerce")
+        note_date = pd.to_datetime(origination_date, errors="coerce")
+        if pd.isna(app_date) or pd.isna(note_date):
+            return False
+        return abs((note_date - app_date).days) > 365
+    except:
+        return True
+
+# df["flag_application_note_date_gap"] = df.apply(
+#     lambda row: validate_application_note_date_gap(row["Application Received Date"], row["Origination Date"]),
+#     axis=1,
+# )
+
 # 93. OLTV > 90%
 # Flag if OLTV is > 90% and Loan Type is not 'SELECT 90 30 YR'
 def validate_oltv_high_for_nonselect(original_cltv, loan_type_ls):
@@ -1325,7 +1577,7 @@ def validate_broker_indicator(channel, broker_indicator):
     """
     Returns True if Channel = 2 and Broker Indicator is blank.
     """
-    return str(channel) == "2" and broker_indicator in ["", None]
+    return str(int(channel)) == "2" and broker_indicator in ["", None]
 
 # df["flag_broker_indicator"] = df.apply(lambda row: validate_broker_indicator(row["Channel"], row["Broker Indicator"]), axis=1)
 
@@ -1335,14 +1587,14 @@ def validate_missing_employment_both_borrowers(total_borrowers, b1_len_emp, b2_l
     """
     Returns True if:
     - 2+ borrowers,
-    - AND both employment lengths are blank or zero,
+    - AND both employment lengths are blank,
     - AND either borrower or co-borrower has verification code 3.
     """
     try:
         return (
             int(total_borrowers) >= 2 and
-            (pd.isna(b1_len_emp) or b1_len_emp in ["", 0, None]) and
-            (pd.isna(b2_len_emp) or b2_len_emp in ["", 0, None]) and
+            (pd.isna(b1_len_emp) or b1_len_emp in ["", None]) and
+            (pd.isna(b2_len_emp) or b2_len_emp in ["", None]) and
             (int(b1_emp_ver) == 3 or int(b2_emp_ver) == 3)
         )
     except:
@@ -1463,6 +1715,21 @@ def validate_first_payment_before_maturity(first_payment_date, maturity_date):
 
 # df["flag_first_payment_before_maturity"] = df.apply(lambda row: validate_first_payment_before_maturity(row["First Payment Date of Loan"], row["Maturity Date"]), axis=1)
 
+# 104A. Maturity Date on First of Month
+# Flag if Maturity Date is blank or not on the 1st day of the month
+def validate_maturity_date_first_of_month(maturity_date):
+    """
+    Returns True if:
+    - Maturity Date is blank,
+    - or Maturity Date does not fall on the 1st day of the month.
+    """
+    try:
+        return maturity_date == "" or maturity_date.day != 1
+    except:
+        return True
+
+# df["flag_maturity_date_first_of_month"] = df["Maturity Date"].apply(validate_maturity_date_first_of_month)
+
 # 105. Negative incomes
 # Flag if any income value is negative
 def validate_negative_incomes(*incomes):
@@ -1553,11 +1820,24 @@ def validate_amort_term_gt_term_to_maturity(original_amortization_term, original
     Returns True if Original Amortization Term > Original Term to Maturity.
     """
     try:
-        return float(original_amortization_term) > float(original_term_to_maturity)
+        return float(original_amortization_term) != float(original_term_to_maturity)
     except:
         return True
 
 # df["flag_amort_term_gt_term_to_maturity"] = df.apply(lambda row: validate_amort_term_gt_term_to_maturity(row["Original Amortization Term"], row["Original Term to Maturity"]), axis=1)
+
+# 108A. Original Amortization Term < 60
+# Flag if Original Amortization Term is less than 60 months
+def validate_original_amortization_term_lt_60(original_amortization_term):
+    """
+    Returns True if Original Amortization Term < 60.
+    """
+    try:
+        return float(original_amortization_term) < 60
+    except:
+        return True
+
+# df["flag_original_amortization_term_lt_60"] = df.apply(lambda row: validate_original_amortization_term_lt_60(row["Original Amortization Term"]), axis=1)
 
 # 109. Missing Subsequent Payment Reset Period
 # Flag if field is missing or zero when Amortization Type is 2
@@ -1568,6 +1848,87 @@ def validate_missing_subsequent_payment_reset(amortization_type, subsequent_paym
     return amortization_type == 2 and subsequent_payment_reset_period in ["", 0, None]
 
 # df["flag_missing_subsequent_payment_reset"] = df.apply(lambda row: validate_missing_subsequent_payment_reset(row["Amortization Type"], row["Subsequent Payment Reset Period"]), axis=1)
+
+# 109A. Subsequent Interest Rate Reset Period Range
+# Flag if Subsequent Interest Rate Reset Period is missing or out of range when Amortization Type is 2
+def validate_subsequent_interest_rate_reset_period_range(
+    amortization_type,
+    subsequent_interest_rate_reset_period,
+):
+    """
+    Returns True if Amortization Type is 2 and Subsequent Interest Rate Reset Period is blank
+    or not in the 0-120 range.
+    """
+    try:
+        if _is_blank(amortization_type):
+            return False
+        if int(float(amortization_type)) != 2:
+            return False
+        if _is_blank(subsequent_interest_rate_reset_period):
+            return True
+        value = float(subsequent_interest_rate_reset_period)
+        if not value.is_integer():
+            return True
+        value = int(value)
+        return not (0 <= value <= 120)
+    except:
+        return True
+
+# df["flag_subsequent_interest_rate_reset_period_range"] = df.apply(lambda row: validate_subsequent_interest_rate_reset_period_range(row["Amortization Type"], row["Subsequent Interest Rate Reset Period"]), axis=1)
+
+# 109B. Initial Fixed Payment Period Range
+# Flag if Initial Fixed Payment Period is missing or out of range when Amortization Type is 2
+def validate_initial_fixed_payment_period_range(
+    amortization_type,
+    initial_fixed_payment_period,
+):
+    """
+    Returns True if Amortization Type is 2 and Initial Fixed Payment Period is blank
+    or not in the 0-120 range.
+    """
+    try:
+        if _is_blank(amortization_type):
+            return False
+        if int(float(amortization_type)) != 2:
+            return False
+        if _is_blank(initial_fixed_payment_period):
+            return True
+        value = float(initial_fixed_payment_period)
+        if not value.is_integer():
+            return True
+        value = int(value)
+        return not (0 <= value <= 120)
+    except:
+        return True
+
+# df["flag_initial_fixed_payment_period_range"] = df.apply(lambda row: validate_initial_fixed_payment_period_range(row["Amortization Type"], row["Initial Fixed Payment Period"]), axis=1)
+
+# 109C. Subsequent Payment Reset Period Range
+# Flag if Subsequent Payment Reset Period is missing or out of range when Amortization Type is 2
+def validate_subsequent_payment_reset_period_range(
+    amortization_type,
+    subsequent_payment_reset_period,
+):
+    """
+    Returns True if Amortization Type is 2 and Subsequent Payment Reset Period is blank
+    or not in the 0-120 range.
+    """
+    try:
+        if _is_blank(amortization_type):
+            return False
+        if int(float(amortization_type)) != 2:
+            return False
+        if _is_blank(subsequent_payment_reset_period):
+            return True
+        value = float(subsequent_payment_reset_period)
+        if not value.is_integer():
+            return True
+        value = int(value)
+        return not (0 <= value <= 120)
+    except:
+        return True
+
+# df["flag_subsequent_payment_reset_period_range"] = df.apply(lambda row: validate_subsequent_payment_reset_period_range(row["Amortization Type"], row["Subsequent Payment Reset Period"]), axis=1)
 
 # 110. Sales price with incorrect loan purpose
 # Flag if Sales Price is present but Loan Purpose is not 6 or 7
@@ -1595,6 +1956,21 @@ def validate_ti_payment(current_other_monthly_payment, escrow_indicator):
 
 # df["flag_ti_payment"] = df.apply(lambda row: validate_ti_payment(row["Current ‘Other’ Monthly Payment"], row["Escrow Indicator"]), axis=1)
 
+# 112. Negative T&I Payment
+# Flag if Current 'Other' Monthly Payment is negative
+def validate_negative_ti_payment(current_other_monthly_payment):
+    """
+    Returns True if Current 'Other' Monthly Payment is negative.
+    """
+    try:
+        if current_other_monthly_payment in ["", None] or pd.isna(current_other_monthly_payment):
+            return False
+        return float(current_other_monthly_payment) < 0
+    except:
+        return True
+
+# df["flag_negative_ti_payment"] = df["Current ‘Other’ Monthly Payment"].apply(validate_negative_ti_payment)
+
 # 114. OCLTV < OLTV
 # Flag if OCLTV differs from OLTV and there is no Junior Lien and Loan Type does not include 'SECOND'
 def validate_ocltv_vs_oltv(original_cltv, original_ltv, junior_mortgage_balance, loan_type_ls):
@@ -1617,12 +1993,12 @@ def validate_ocltv_vs_oltv(original_cltv, original_ltv, junior_mortgage_balance,
 
 # 115. HELOC Ind
 # Flag if HELOC Indicator is 1 and HELOC Draw Period is missing or zero
-def validate_heloc_indicator(heloc_indicator, heloc_draw_period):
-    """
-    Returns True if HELOC Indicator is 1 and HELOC Draw Period is blank or 0.
-    """
-    return heloc_indicator == 1 and heloc_draw_period in ["", 0, None]
-
+# def validate_heloc_indicator(heloc_indicator, heloc_draw_period):
+#     """
+#     Returns True if HELOC Indicator is 1 and HELOC Draw Period is blank or 0.
+#     """
+#     return heloc_indicator == 1 and heloc_draw_period in ["", 0, None]
+#
 # df["flag_heloc_indicator"] = df.apply(lambda row: validate_heloc_indicator(row["HELOC Indicator"], row["HELOC Draw Period"]), axis=1)
 
 # 116. Purchase with Years in Home
@@ -1766,6 +2142,94 @@ def validate_arm_fields_populated_for_fixed_rate(
         return any(is_populated(value) for value in fields)
     except:
         return True
+
+# 120A. ARM Fields Missing for Adjustable-Rate Loans
+# Flag if any ARM-related fields are missing when Amortization Type is 2 (ARM)
+def validate_arm_fields_required_for_adjustable_rate(
+    amortization_type,
+    arm_look_back_days,
+    gross_margin,
+    arm_round_flag,
+    arm_round_factor,
+    index_type,
+    initial_fixed_rate_period,
+    initial_interest_rate_cap_change_up,
+    initial_interest_rate_cap_change_down,
+    subsequent_interest_rate_reset_period,
+    subsequent_interest_rate_cap_change_down,
+    subsequent_interest_rate_cap_change_up,
+    lifetime_max_rate_ceiling,
+    lifetime_min_rate_floor,
+    negative_amortization_limit,
+    initial_negative_amortization_recast_period,
+    subsequent_negative_amortization_recast_period,
+    initial_fixed_payment_period,
+    subsequent_payment_reset_period,
+    initial_periodic_payment_cap,
+    subsequent_periodic_payment_cap,
+    initial_minimum_payment_reset_period,
+    subsequent_minimum_payment_reset_period,
+    option_arm_indicator,
+):
+    """
+    Returns True if Amortization Type is 2 and any ARM-only field is blank.
+    Treats blank or NaN values as missing; zeros are considered present.
+    """
+    try:
+        if amortization_type in ["", None]:
+            return False
+        if pd.isna(amortization_type):
+            return False
+        if int(float(amortization_type)) != 2:
+            return False
+
+        fields = [
+            arm_look_back_days,
+            gross_margin,
+            arm_round_flag,
+            arm_round_factor,
+            index_type,
+            initial_fixed_rate_period,
+            initial_interest_rate_cap_change_up,
+            initial_interest_rate_cap_change_down,
+            subsequent_interest_rate_reset_period,
+            subsequent_interest_rate_cap_change_down,
+            subsequent_interest_rate_cap_change_up,
+            lifetime_max_rate_ceiling,
+            lifetime_min_rate_floor,
+            negative_amortization_limit,
+            initial_negative_amortization_recast_period,
+            subsequent_negative_amortization_recast_period,
+            initial_fixed_payment_period,
+            subsequent_payment_reset_period,
+            initial_periodic_payment_cap,
+            subsequent_periodic_payment_cap,
+            initial_minimum_payment_reset_period,
+            subsequent_minimum_payment_reset_period,
+            option_arm_indicator,
+        ]
+        return any(_is_blank(value) for value in fields)
+    except:
+        return True
+
+# 120B. Negative Amortization Fields Populated
+# Flag if any Negative Amortization fields are populated (any value)
+def validate_negative_amortization_limit(
+    negative_amortization_limit,
+    initial_negative_amortization_recast_period,
+    subsequent_negative_amortization_recast_period,
+):
+    """
+    Returns True if any Negative Amortization field is populated (non-blank).
+    """
+    return any(
+        not _is_blank(value)
+        for value in [
+            negative_amortization_limit,
+            initial_negative_amortization_recast_period,
+            subsequent_negative_amortization_recast_period,
+        ]
+    )
 
 # 121. Application Received vs First Payment Date
 # Flag if Application Received Date and First Payment Date are 2+ years apart

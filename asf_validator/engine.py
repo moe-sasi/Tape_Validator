@@ -50,7 +50,16 @@ _VARARGS_RULE_COLUMNS = {
 
 _ALLOW_MISSING_PARAM_RULES = {
     "validate_arm_fields_populated_for_fixed_rate",
+    "validate_arm_fields_required_for_adjustable_rate",
     "validate_missing_required_fields",
+}
+
+_WARNING_RULES = {
+    "validate_margin_less_than_floor",
+    "validate_negative_incomes",
+    "validate_refi_with_less_than_1_year_in_home",
+    "validate_appraised_value_over_8000000",
+    "validate_total_number_of_borrowers_over_4",
 }
 
 _CANONICAL_REPLACEMENTS = {
@@ -118,11 +127,16 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
     registry = get_validations_registry()
     normalized_map, canonical_map = _build_column_maps(tape_df.columns)
     issues: list[dict[str, object]] = []
+    warnings: list[dict[str, object]] = []
     rule_summary: list[dict[str, object]] = []
+    warning_summary: list[dict[str, object]] = []
     skipped_rules: list[dict[str, str]] = []
     loan_number_column = _resolve_column_name("loan_number", normalized_map, canonical_map)
 
     for rule_name, func in registry.items():
+        is_warning = rule_name in _WARNING_RULES
+        issue_bucket = warnings if is_warning else issues
+        summary_bucket = warning_summary if is_warning else rule_summary
         signature = inspect.signature(func)
         params = list(signature.parameters.values())
         varargs = next(
@@ -202,7 +216,7 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
             missing_per_row = tape_df.apply(collect_missing_required, axis=1)
             issue_mask = missing_per_row.apply(bool)
             issue_count = int(issue_mask.sum())
-            rule_summary.append({"rule": rule_name, "issue_count": issue_count})
+            summary_bucket.append({"rule": rule_name, "issue_count": issue_count})
 
             if issue_count == 0:
                 continue
@@ -215,7 +229,7 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
                 }
                 if loan_number_column:
                     record["loan_number"] = tape_df.at[row_index, loan_number_column]
-                issues.append(record)
+                issue_bucket.append(record)
             continue
 
         def apply_rule(row: pd.Series) -> bool:
@@ -234,7 +248,7 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
         mask = tape_df.apply(apply_rule, axis=1)
         mask = mask.fillna(False).astype(bool)
         issue_count = int(mask.sum())
-        rule_summary.append({"rule": rule_name, "issue_count": issue_count})
+        summary_bucket.append({"rule": rule_name, "issue_count": issue_count})
 
         if issue_count == 0:
             continue
@@ -247,17 +261,24 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
             }
             if loan_number_column:
                 record["loan_number"] = tape_df.at[row_index, loan_number_column]
-            issues.append(record)
+            issue_bucket.append(record)
 
     issues_columns = ["rule", "row_index", "columns"]
     if loan_number_column:
         issues_columns.insert(2, "loan_number")
     issues_df = pd.DataFrame(issues, columns=issues_columns)
+    warnings_df = pd.DataFrame(warnings, columns=issues_columns)
     rule_summary_df = pd.DataFrame(rule_summary)
     if not rule_summary_df.empty:
         rule_summary_df = rule_summary_df.sort_values("rule").reset_index(drop=True)
     else:
         rule_summary_df = pd.DataFrame(columns=["rule", "issue_count"])
+
+    warning_summary_df = pd.DataFrame(warning_summary)
+    if not warning_summary_df.empty:
+        warning_summary_df = warning_summary_df.sort_values("rule").reset_index(drop=True)
+    else:
+        warning_summary_df = pd.DataFrame(columns=["rule", "issue_count"])
 
     skipped_rules_df = pd.DataFrame(skipped_rules)
     if not skipped_rules_df.empty:
@@ -272,6 +293,8 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
         "row_count": len(tape_df),
         "columns": list(tape_df.columns),
         "issues": issues_df,
+        "warnings": warnings_df,
         "rule_summary": rule_summary_df,
+        "warning_summary": warning_summary_df,
         "skipped_rules": skipped_rules_df,
     }
