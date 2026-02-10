@@ -22,6 +22,17 @@ def _is_blank(value):
     return False
 
 
+def _is_years_value_invalid(value, max_years=60):
+    """Return True when a populated years-based value is non-numeric or out of range."""
+    try:
+        if _is_blank(value):
+            return False
+        years = float(value)
+        return years < 0 or years > float(max_years)
+    except:
+        return True
+
+
 def validate_missing_required_fields(
     originator_doc_code,
     primary_servicer,
@@ -1498,6 +1509,42 @@ def validate_coborrower_employment_gt_industry(length_of_employment_coborrower, 
         return True
 
 # df["flag_coborrower_employment_gt_industry"] = df.apply(lambda row: validate_coborrower_employment_gt_industry(row["Length of Employment: Co-Borrower"], row["Co-Borrower - Yrs at in Industry"]), axis=1)
+
+
+def validate_borrower_years_in_industry_max_60(brrw_yrs_at_in_industry):
+    """
+    Returns True if borrower years in industry is non-numeric, negative, or above 60.
+    """
+    return _is_years_value_invalid(brrw_yrs_at_in_industry, max_years=60)
+
+
+def validate_coborrower_years_in_industry_max_60(cobrrw_yrs_at_in_industry):
+    """
+    Returns True if co-borrower years in industry is non-numeric, negative, or above 60.
+    """
+    return _is_years_value_invalid(cobrrw_yrs_at_in_industry, max_years=60)
+
+
+def validate_borrower_years_at_job_max_60(length_of_employment_borrower):
+    """
+    Returns True if borrower years at job is non-numeric, negative, or above 60.
+    """
+    return _is_years_value_invalid(length_of_employment_borrower, max_years=60)
+
+
+def validate_coborrower_years_at_job_max_60(length_of_employment_co_borrower):
+    """
+    Returns True if co-borrower years at job is non-numeric, negative, or above 60.
+    """
+    return _is_years_value_invalid(length_of_employment_co_borrower, max_years=60)
+
+
+def validate_years_in_home_max_60(years_in_home):
+    """
+    Returns True if years in home is non-numeric, negative, or above 60.
+    """
+    return _is_years_value_invalid(years_in_home, max_years=60)
+
 
 # 92. Application Date
 # Flag if Application Date is after Origination or more than 10 years ago or blank
