@@ -2,12 +2,16 @@
 
 import pandas as pd
 import numpy as np
+import numbers
 import pdb # For debugging purposes
 
 
 def _is_blank(value):
     if value is None:
         return True
+    # Treat numeric zero as populated (not missing).
+    if isinstance(value, numbers.Number) and not isinstance(value, bool) and value == 0:
+        return False
     try:
         if pd.isna(value):
             return True
@@ -77,8 +81,8 @@ def validate_missing_required_fields(
     original_property_valuation_date,
     original_cltv,
     original_ltv,
-    borrower_years_in_industry,
-    coborrower_years_in_industry,
+    brrw_yrs_at_in_industry,
+    cobrrw_yrs_at_in_industry,
     maturity_date,
     loan_type_ls,
     atrqm_status,
@@ -88,7 +92,9 @@ def validate_missing_required_fields(
 ):
     """
     Returns True if any required field is blank (empty, None, NaN, or whitespace).
+    Numeric zero values (0 / 0.0) are treated as populated.
     """
+
     required_values = [
         originator_doc_code,
         primary_servicer,
@@ -148,8 +154,8 @@ def validate_missing_required_fields(
         original_property_valuation_date,
         original_cltv,
         original_ltv,
-        borrower_years_in_industry,
-        coborrower_years_in_industry,
+        brrw_yrs_at_in_industry,
+        cobrrw_yrs_at_in_industry,
         maturity_date,
         loan_type_ls,
         atrqm_status,
@@ -157,6 +163,7 @@ def validate_missing_required_fields(
         dd_firm,
         dd_review_type,
     ]
+    # breakpoint(); # For debugging purposes
     return any(_is_blank(value) for value in required_values)
 
 # Originator DTI

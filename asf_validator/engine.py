@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import bdb
 from typing import Iterable
 
 import pandas as pd
@@ -196,7 +197,7 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
                         }
                     )
                     continue
-
+            
         if rule_name == "validate_missing_required_fields" and not varargs:
             display_columns = []
             for param, resolved in zip(params, param_columns):
@@ -204,6 +205,13 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
                     display_columns.append(_PARAM_ALIASES.get(param.name, param.name))
                 else:
                     display_columns.append(resolved)
+
+            def apply_missing_required(row: pd.Series) -> bool:
+                values = [
+                    row[col] if col is not None else None
+                    for col in param_columns
+                ]
+                return bool(func(*values))
 
             def collect_missing_required(row: pd.Series) -> list[str]:
                 missing_columns: list[str] = []
@@ -213,15 +221,16 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
                         missing_columns.append(display)
                 return missing_columns
 
-            missing_per_row = tape_df.apply(collect_missing_required, axis=1)
-            issue_mask = missing_per_row.apply(bool)
+            issue_mask = tape_df.apply(apply_missing_required, axis=1)
+            issue_mask = issue_mask.fillna(False).astype(bool)
             issue_count = int(issue_mask.sum())
             summary_bucket.append({"rule": rule_name, "issue_count": issue_count})
 
             if issue_count == 0:
                 continue
 
-            for row_index in missing_per_row[issue_mask].index:
+            missing_per_row = tape_df[issue_mask].apply(collect_missing_required, axis=1)
+            for row_index in missing_per_row.index:
                 record: dict[str, object] = {
                     "rule": rule_name,
                     "row_index": row_index,
@@ -242,7 +251,9 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
                         for col in param_columns
                     ]
                 return bool(func(*values))
-            except Exception:  # pragma: no cover - defensive
+            except Exception as exc:  # pragma: no cover - defensive
+                if isinstance(exc, bdb.BdbQuit):
+                    raise
                 return True
 
         mask = tape_df.apply(apply_rule, axis=1)
