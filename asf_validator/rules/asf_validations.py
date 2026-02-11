@@ -1456,6 +1456,57 @@ def validate_total_number_of_borrowers_over_4(total_number_of_borrowers):
 
 # df["warn_total_number_of_borrowers_over_4"] = df["Total Number of Borrowers"].apply(validate_total_number_of_borrowers_over_4)
 
+# 78A. Borrower Identity Completeness
+# Enforce co-borrower presence and SSN validity rules
+def validate_borrower_identity_completeness(
+    total_number_of_borrowers,
+    primary_borrower_id,
+    co_borrower_name,
+    co_borrower_ssn,
+):
+    """
+    Returns True when borrower identity fields violate ASF requirements:
+    - If Total Number of Borrowers > 1: co-borrower name and SSN must be populated and SSN must be valid.
+    - If Total Number of Borrowers == 1: co-borrower name and SSN must be blank.
+    - Primary borrower SSN must always be present, 9 digits, and not a placeholder.
+    """
+    try:
+        if _is_blank(total_number_of_borrowers):
+            return False
+        borrower_count = float(total_number_of_borrowers)
+    except Exception:
+        return True
+
+    placeholder_ssns = {"000000000", "999999999", "123456789"}
+
+    def normalize_digits(value):
+        if _is_blank(value):
+            return ""
+        try:
+            if isinstance(value, float) and value.is_integer():
+                value = int(value)
+        except Exception:
+            pass
+        return "".join(ch for ch in str(value) if ch.isdigit())
+
+    def is_valid_ssn(value):
+        digits = normalize_digits(value)
+        return len(digits) == 9 and digits not in placeholder_ssns
+
+    primary_valid = is_valid_ssn(primary_borrower_id)
+
+    if borrower_count > 1:
+        cob_name_present = not _is_blank(co_borrower_name)
+        cob_ssn_valid = is_valid_ssn(co_borrower_ssn)
+        return (not primary_valid) or (not cob_name_present) or (not cob_ssn_valid)
+
+    if borrower_count == 1:
+        cob_name_blank = _is_blank(co_borrower_name)
+        cob_ssn_blank = _is_blank(co_borrower_ssn)
+        return (not primary_valid) or (not cob_name_blank) or (not cob_ssn_blank)
+
+    return True
+
 # 79. Liquid Reserves
 # Flag if reserves are blank/zero and loan type does not include 'CLOSED END SECOND' or 'AGENCY'
 def validate_liquid_reserves(liquid_cash_reserves, loan_type_ls):
