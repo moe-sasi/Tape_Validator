@@ -2420,6 +2420,64 @@ def validate_application_received_vs_first_payment(
 #     axis=1,
 # )
 
+
+def validate_modification_coherence(
+    number_of_modifications,
+    pre_modification_interest_note_rate,
+    pre_modification_p_i_payment,
+    rate_change_cap_up,
+    rate_change_cap_down,
+    pre_modification_i_o_term,
+    capitalized_amount,
+    deferred_amount,
+    forgiven_amount,
+):
+    """
+    Returns True when modification fields are inconsistent:
+    - If Number of Modifications > 0, all pre-modification fields and the
+      capitalized/deferred/forgiven amounts must be populated.
+    - If Number of Modifications == 0, the capitalized/deferred/forgiven
+      amounts must be zero or blank.
+    """
+    try:
+        if _is_blank(number_of_modifications):
+            return False
+        mods = float(number_of_modifications)
+    except Exception:
+        return True
+
+    def as_float(value):
+        try:
+            return float(value)
+        except Exception:
+            return None
+
+    amounts = [capitalized_amount, deferred_amount, forgiven_amount]
+
+    if mods > 0:
+        required_fields = [
+            pre_modification_interest_note_rate,
+            pre_modification_p_i_payment,
+            rate_change_cap_up,
+            rate_change_cap_down,
+            pre_modification_i_o_term,
+            *amounts,
+        ]
+        return any(_is_blank(value) for value in required_fields)
+
+    if mods == 0:
+        def has_non_zero_amount(value):
+            if _is_blank(value):
+                return False
+            parsed = as_float(value)
+            if parsed is None:
+                return True
+            return parsed != 0
+
+        return any(has_non_zero_amount(value) for value in amounts)
+
+    return True
+
 __all__ = [name for name, value in globals().items() if name.startswith("validate_") and callable(value)]
 if "pmt" in globals():
     __all__.append("pmt")
