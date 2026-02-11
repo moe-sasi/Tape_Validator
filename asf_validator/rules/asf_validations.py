@@ -675,6 +675,107 @@ def validate_mi_lender_or_borrower_paid(
 #     axis=1,
 # )
 
+# 37B. MI Coverage Required by LTV/CLTV and Occupancy
+# Flag when MI fields do not match LTV/occupancy requirements
+def validate_mi_coverage_by_ltv(
+    original_ltv,
+    original_cltv,
+    occupancy,
+    mortgage_insurance_percent,
+    pool_insurance_stop_loss,
+    mortgage_insurance_company_name,
+):
+    """
+    Returns True when:
+    - Occupancy is primary or second home (1/2), AND
+    - Either LTV or CLTV is above 0.80 (or 80%) but MI coverage > 0 and company are not both present,
+      OR LTV/CLTV are at or below 0.80 (when provided) and any MI coverage/company value is populated.
+    """
+    try:
+        def _to_ratio(value):
+            try:
+                if _is_blank(value):
+                    return None
+                ratio = float(value)
+                # Values like 80 should be treated as 0.80
+                if ratio > 1.5:
+                    ratio = ratio / 100.0
+                return ratio
+            except:
+                return None
+
+        def _is_primary_or_second(value):
+            try:
+                if _is_blank(value):
+                    return False
+                occ_value = float(value)
+                if occ_value.is_integer() and int(occ_value) in (1, 2):
+                    return True
+            except:
+                pass
+            try:
+                occ_text = str(value).strip().lower()
+                return occ_text in {
+                    "primary",
+                    "primary residence",
+                    "owner occupied",
+                    "owner-occupied",
+                    "second",
+                    "second home",
+                    "2nd home",
+                }
+            except:
+                return False
+
+        def _is_positive_number(value):
+            try:
+                if _is_blank(value):
+                    return False
+                return float(value) > 0
+            except:
+                return False
+
+        def _is_nonzero_or_populated(value):
+            try:
+                if _is_blank(value):
+                    return False
+                return float(value) != 0
+            except:
+                # Non-numeric but populated should be treated as populated
+                return True
+
+        if not _is_primary_or_second(occupancy):
+            return False
+
+        ratios = [r for r in (_to_ratio(original_ltv), _to_ratio(original_cltv)) if r is not None]
+        high_ltv = any(ratio > 0.80 for ratio in ratios)
+        coverage_present = _is_positive_number(mortgage_insurance_percent) or _is_positive_number(pool_insurance_stop_loss)
+        company_present = not _is_blank(mortgage_insurance_company_name)
+
+        if high_ltv:
+            return not (coverage_present and company_present)
+
+        if ratios:
+            extra_coverage = _is_nonzero_or_populated(mortgage_insurance_percent) or _is_nonzero_or_populated(pool_insurance_stop_loss)
+            return extra_coverage or company_present
+
+        # If no LTV/CLTV values are provided, do not flag here; other rules handle missingness.
+        return False
+    except:
+        return True
+
+# df["flag_mi_coverage_by_ltv"] = df.apply(
+#     lambda row: validate_mi_coverage_by_ltv(
+#         row["Original LTV"],
+#         row["Original CLTV"],
+#         row["Occupancy"],
+#         row["Mortgage Insurance Percent"],
+#         row["Pool Insurance Stop Loss %"],
+#         row["Mortgage Insurance Company Name"],
+#     ),
+#     axis=1,
+# )
+
 # 38. Number of Mortgaged Properties
 # Flag if Number of Mortgaged Properties is blank or less than 1
 def validate_number_of_mortgaged_properties(number_of_mortgaged_properties, loan_purpose):
