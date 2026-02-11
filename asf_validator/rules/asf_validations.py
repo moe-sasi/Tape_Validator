@@ -1156,6 +1156,52 @@ def validate_percent_down_payment(percent_down_payment, loan_purpose):
 
 # df["flag_percent_down_payment"] = df.apply(lambda row: validate_percent_down_payment(row["Percentage of Down Payment from Borrower Own Funds"], row["Loan Purpose"]), axis=1)
 
+# Cash-to/from borrower sanity check
+def validate_cash_to_from_borrower_sanity(
+    loan_purpose,
+    cash_to_from_brrw_at_closing,
+    percentage_of_down_payment_from_borrower_own_funds,
+):
+    """
+    Returns True when cash/down-payment values are inconsistent with loan purpose:
+    - Purchases (6 or 7) should not give cash to the borrower (amount must be <= 0)
+      and must show a positive % down payment from borrower funds.
+    - Cash-out refis (3) should not take cash from the borrower at closing (amount must be >= 0).
+    - All refis (3 or 9) must show a 0% borrower-down-payment value.
+    """
+    try:
+        lp = int(float(loan_purpose))
+    except Exception:
+        return True
+
+    def _as_float(value):
+        try:
+            if _is_blank(value):
+                return None
+            return float(value)
+        except Exception:
+            return None
+
+    cash_to_from = _as_float(cash_to_from_brrw_at_closing)
+    percent_down = _as_float(percentage_of_down_payment_from_borrower_own_funds)
+
+    if lp in (6, 7):
+        if cash_to_from is not None and cash_to_from > 0:
+            return True
+        if percent_down is None or percent_down <= 0:
+            return True
+        return False
+
+    if lp == 3:
+        if cash_to_from is not None and cash_to_from < 0:
+            return True
+
+    if lp in (3, 9):
+        if percent_down is None or percent_down != 0:
+            return True
+
+    return False
+
 # 57. Periodic Cap
 # Flag if Periodic Cap fields are missing or inconsistent based on Amortization Type
 def validate_periodic_cap(amortization_type, cap_up, cap_down):
