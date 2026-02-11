@@ -586,20 +586,74 @@ def validate_gross_margin_gt_lifetime_max_rate(gross_margin, lifetime_max_rate_c
 #
 # df["flag_sales_price_for_heloc"] = df.apply(lambda row: validate_sales_price_for_heloc(row["HELOC Indicator"], row["Sales Price"]), axis=1)
 
-# 29A. HELOC Indicator Must Be 0
-# Flag if HELOC Indicator is anything other than 0
+# 29A. HELOC Indicator Allowed Values
+# Flag if HELOC Indicator is not 0 or 1 (including blanks)
 def validate_heloc_indicator_zero(heloc_indicator):
     """
-    Returns True if HELOC Indicator is not 0 (including blanks).
+    Returns True if HELOC Indicator is blank or not 0/1.
     """
     try:
         if heloc_indicator in ["", None] or pd.isna(heloc_indicator):
             return True
-        return float(heloc_indicator) != 0
+        return float(heloc_indicator) not in (0, 1)
     except:
         return True
 
 # df["flag_heloc_indicator_zero"] = df["HELOC Indicator"].apply(validate_heloc_indicator_zero)
+
+
+# 29B. HELOC Field Logic
+# Enforce HELOC Draw Period / junior lien values based on HELOC Indicator
+def validate_heloc_logic(
+    heloc_indicator,
+    heloc_draw_period,
+    junior_mortgage_balance,
+    junior_mortgage_drawn_amount,
+):
+    """
+    Returns True when HELOC-related fields are inconsistent:
+    - If HELOC Indicator == 1: HELOC Draw Period must be positive (>0) and Junior Mortgage Balance must be >0.
+    - If HELOC Indicator == 0: HELOC Draw Period and Junior Mortgage Drawn Amount must be blank or zero.
+    """
+    try:
+        if heloc_indicator in ["", None] or pd.isna(heloc_indicator):
+            return False
+        indicator = float(heloc_indicator)
+    except:
+        return True
+
+    def to_float(value):
+        try:
+            return float(value)
+        except:
+            return None
+
+    def is_blank_or_zero(value):
+        if _is_blank(value):
+            return True
+        parsed = to_float(value)
+        if parsed is None:
+            return False
+        return parsed == 0
+
+    if indicator == 1:
+        draw_period = to_float(heloc_draw_period)
+        balance = to_float(junior_mortgage_balance)
+        if draw_period is None or draw_period <= 0:
+            return True
+        if balance is None or balance <= 0:
+            return True
+        return False
+
+    if indicator == 0:
+        if not is_blank_or_zero(heloc_draw_period):
+            return True
+        if not is_blank_or_zero(junior_mortgage_drawn_amount):
+            return True
+        return False
+
+    # Other indicator values are handled by validate_heloc_indicator_zero
+    return False
 
 
 # 35. Monthly Debt All Borrowers
