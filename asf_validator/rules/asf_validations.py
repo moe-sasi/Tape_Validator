@@ -514,7 +514,7 @@ def validate_first_payment_date(first_payment_date_of_loan, origination_date):
         return (
             first_payment_date_of_loan == "" or
             origination_date > first_payment_date_of_loan or
-            first_payment_date_of_loan.day != 1
+            pd.to_datetime(first_payment_date_of_loan, errors="coerce").day != 1
         )
     except:
         return True
