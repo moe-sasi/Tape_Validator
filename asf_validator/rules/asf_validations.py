@@ -33,6 +33,29 @@ def _is_years_value_invalid(value, max_years=60):
         return True
 
 
+def _parse_date_value(value):
+    """Parse a date-like value into a normalized Timestamp or return None when missing/invalid."""
+    if value in ["", None, 0]:
+        return None
+    try:
+        if isinstance(value, numbers.Number) and not isinstance(value, bool):
+            int_value = int(value)
+            if 10000000 <= abs(int_value) <= 99999999:
+                dt = pd.to_datetime(f"{int_value:08d}", format="%Y%m%d", errors="coerce")
+            else:
+                dt = pd.to_datetime(value, errors="coerce")
+        else:
+            dt = pd.to_datetime(value, errors="coerce")
+
+        if pd.isna(dt):
+            return None
+        if getattr(dt, "tzinfo", None) is not None:
+            dt = dt.tz_convert(None)
+        return pd.Timestamp(dt).normalize()
+    except Exception:
+        return None
+
+
 def validate_missing_required_fields(
     originator_doc_code,
     primary_servicer,
@@ -209,6 +232,50 @@ def validate_borrower_fico_at_or_below_660(borrower_fico_score):
     """
     try:
         return borrower_fico_score <= 660
+    except:
+        return True
+
+
+def validate_most_recent_fico_recency(
+    most_recent_fico_date,
+    application_received_date,
+    origination_date,
+    borrower_fico_score,
+    most_recent_fico_method,
+):
+    """
+    Returns True when FICO timing/method requirements are violated:
+    - A FICO score is present but Most Recent FICO Method is missing.
+    - A FICO score is present but Most Recent FICO Date is missing.
+    - Most Recent FICO Date is in the future.
+    - Most Recent FICO Date is more than 180 days away from the nearest of
+      Application Received Date or Origination Date (using the 180-day cap
+      from the 120-180 day recency guideline).
+    """
+    try:
+        has_fico_score = not _is_blank(borrower_fico_score)
+        has_method = not _is_blank(most_recent_fico_method)
+        if has_fico_score and not has_method:
+            return True
+
+        fico_dt = _parse_date_value(most_recent_fico_date)
+        if fico_dt is None:
+            return has_fico_score
+
+        today = pd.Timestamp.now().normalize()
+        if fico_dt > today:
+            return True
+
+        ref_dates = [
+            _parse_date_value(application_received_date),
+            _parse_date_value(origination_date),
+        ]
+        ref_dates = [dt for dt in ref_dates if dt is not None]
+        if not ref_dates:
+            return False
+
+        nearest_delta = min(abs((ref - fico_dt).days) for ref in ref_dates)
+        return nearest_delta > 180
     except:
         return True
 

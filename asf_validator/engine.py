@@ -53,6 +53,7 @@ _ALLOW_MISSING_PARAM_RULES = {
     "validate_arm_fields_populated_for_fixed_rate",
     "validate_arm_fields_required_for_adjustable_rate",
     "validate_missing_required_fields",
+    "validate_most_recent_fico_recency",
 }
 
 _WARNING_RULES = {
