@@ -1908,6 +1908,62 @@ def validate_lien_position_vs_loan_type(lien_position, loan_type_ls):
 
 # df["flag_lien_position_vs_loan_type"] = df.apply(lambda row: validate_lien_position_vs_loan_type(row["Lien Position"], row["LOAN_TYPE_LS"]), axis=1)
 
+# 103A. Senior-lien completeness for seconds
+# Flag if senior-lien details are missing when Lien Position = 2, or populated when Lien Position = 1
+def validate_senior_lien_completeness(
+    lien_position,
+    senior_loan_amounts,
+    loan_type_most_senior_lien,
+    hybrid_period_most_senior_lien_months,
+    origination_date_most_senior_lien,
+):
+    """
+    Returns True if:
+    - Lien Position = 2 and any senior-lien field is blank/zero (amounts and periods must be > 0), or
+    - Lien Position = 1 and any senior-lien field is populated (non-blank and non-zero).
+    """
+    try:
+        position = int(float(lien_position))
+    except Exception:
+        return True
+
+    def is_populated(value):
+        if _is_blank(value):
+            return False
+        try:
+            if float(value) == 0:
+                return False
+        except Exception:
+            pass
+        return True
+
+    def is_missing_positive_number(value):
+        try:
+            return _is_blank(value) or float(value) <= 0
+        except Exception:
+            return True
+
+    if position == 2:
+        return (
+            is_missing_positive_number(senior_loan_amounts)
+            or is_missing_positive_number(hybrid_period_most_senior_lien_months)
+            or _is_blank(loan_type_most_senior_lien)
+            or _is_blank(origination_date_most_senior_lien)
+        )
+
+    if position == 1:
+        return any(
+            is_populated(value)
+            for value in (
+                senior_loan_amounts,
+                loan_type_most_senior_lien,
+                hybrid_period_most_senior_lien_months,
+                origination_date_most_senior_lien,
+            )
+        )
+
+    return True
+
 # 104. First Payment < Maturity Date
 # Flag if First Payment Date is after Maturity Date
 def validate_first_payment_before_maturity(first_payment_date, maturity_date):
