@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -20,11 +21,22 @@ def _autofit_columns(writer: pd.ExcelWriter, sheet_name: str, df: pd.DataFrame) 
         worksheet.column_dimensions[worksheet.cell(row=1, column=idx).column_letter].width = max_len + 2
 
 
+def _normalize_generated_at(value: Any) -> str:
+    """Return an ISO timestamp string with microsecond precision in UTC."""
+    if value is None:
+        value = datetime.now(timezone.utc)
+    if not isinstance(value, str):
+        value = value.astimezone(timezone.utc).isoformat(timespec="microseconds")
+    return value
+
+
 def write_report(results: Mapping[str, Any], output_path: Path) -> None:
     """Write validation results to an Excel report.
 
     Writes summary metadata and any provided detail tables.
     """
+    generated_at = _normalize_generated_at(results.get("generated_at"))
+
     issues = results.get("issues", [])
     issues_df = issues if isinstance(issues, pd.DataFrame) else pd.DataFrame(issues)
     warnings = results.get("warnings", [])
@@ -55,6 +67,7 @@ def write_report(results: Mapping[str, Any], output_path: Path) -> None:
     summary_df = pd.DataFrame(
         {
             "metric": [
+                "generated_at",
                 "row_count",
                 "issue_count",
                 "warning_count",
@@ -62,6 +75,7 @@ def write_report(results: Mapping[str, Any], output_path: Path) -> None:
                 "skipped_rules",
             ],
             "value": [
+                generated_at,
                 results.get("row_count", 0),
                 issue_count,
                 warning_count,
