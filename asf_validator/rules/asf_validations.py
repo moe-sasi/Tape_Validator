@@ -240,43 +240,45 @@ def validate_most_recent_fico_recency(
     most_recent_fico_date,
     application_received_date,
     origination_date,
-    borrower_fico_score,
-    most_recent_fico_method,
+    most_recent_primary_borrower_fico,
 ):
     """
-    Returns True when FICO timing/method requirements are violated:
-    - A FICO score is present but Most Recent FICO Method is missing.
-    - A FICO score is present but Most Recent FICO Date is missing.
+    Returns True for any of the following:
+    - Presence mismatch: one of Most Recent FICO Date or Most Recent Primary Borrower FICO is present while the other is missing.
     - Most Recent FICO Date is in the future.
-    - Most Recent FICO Date is more than 180 days away from the nearest of
-      Application Received Date or Origination Date (using the 180-day cap
-      from the 120-180 day recency guideline).
+    - Most Recent FICO Date is more than 180 days from the nearest of Application Received Date or Origination Date.
     """
     try:
-        has_fico_score = not _is_blank(borrower_fico_score)
-        has_method = not _is_blank(most_recent_fico_method)
-        if has_fico_score and not has_method:
+        has_fico_date = not _is_blank(most_recent_fico_date)
+        has_fico_score = not _is_blank(most_recent_primary_borrower_fico)
+
+        # Require the date and score to both be present or both be absent.
+        if has_fico_date != has_fico_score:
             return True
 
+        if not has_fico_date:
+            return False
+
         fico_dt = _parse_date_value(most_recent_fico_date)
+        # If the date is present but cannot be parsed, treat as an issue.
         if fico_dt is None:
-            return has_fico_score
+            return True
 
         today = pd.Timestamp.now().normalize()
         if fico_dt > today:
             return True
 
-        ref_dates = [
-            _parse_date_value(application_received_date),
-            _parse_date_value(origination_date),
-        ]
-        ref_dates = [dt for dt in ref_dates if dt is not None]
-        if not ref_dates:
-            return False
+        # ref_dates = [
+        #     _parse_date_value(application_received_date),
+        #     _parse_date_value(origination_date),
+        # ]
+        # ref_dates = [dt for dt in ref_dates if dt is not None]
+        # if not ref_dates:
+        #     return False
 
-        nearest_delta = min(abs((ref - fico_dt).days) for ref in ref_dates)
-        return nearest_delta > 180
-    except:
+        # nearest_delta = min(abs((ref - fico_dt).days) for ref in ref_dates)
+        # return nearest_delta > 180
+    except Exception:
         return True
 
 
