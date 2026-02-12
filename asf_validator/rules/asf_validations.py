@@ -87,6 +87,7 @@ def validate_missing_required_fields(
     self_employment_flag,
     current_other_monthly_payment,
     length_of_employment_borrower,
+    length_of_employment_co_borrower,
     years_in_home,
     fico_model_used,
     original_primary_borrower_fico,
@@ -115,14 +116,12 @@ def validate_missing_required_fields(
     original_property_valuation_date,
     original_cltv,
     original_ltv,
-    brrw_yrs_at_in_industry,
-    cobrrw_yrs_at_in_industry,
     maturity_date,
     loan_type_ls,
     atrqm_status,
     application_received_date,
     dd_firm,
-    dd_review_type,
+    dd_review_type
 ):
     """
     Returns True if any required field is blank (empty, None, NaN, or whitespace).
@@ -188,14 +187,14 @@ def validate_missing_required_fields(
         original_property_valuation_date,
         original_cltv,
         original_ltv,
-        brrw_yrs_at_in_industry,
-        cobrrw_yrs_at_in_industry,
+        length_of_employment_borrower,
+        length_of_employment_co_borrower,
         maturity_date,
         loan_type_ls,
         atrqm_status,
         application_received_date,
         dd_firm,
-        dd_review_type,
+        dd_review_type
     ]
     # breakpoint(); # For debugging purposes
     return any(_is_blank(value) for value in required_values)
