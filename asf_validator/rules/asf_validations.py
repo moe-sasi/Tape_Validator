@@ -1044,12 +1044,19 @@ def validate_original_appraisal_24_months_old(
     try:
         if pd.isna(original_property_valuation_date) or pd.isna(interest_paid_through_date):
             return True
+        
         valuation_date = pd.to_datetime(original_property_valuation_date, errors="coerce")
         paid_through_date = pd.to_datetime(interest_paid_through_date, errors="coerce")
+
         if pd.isna(valuation_date) or pd.isna(paid_through_date):
             return True
+        
         cutoff_date = paid_through_date - pd.DateOffset(months=24)
+
         return valuation_date <= cutoff_date
+    # except Exception:
+    #     # Surface unexpected exceptions to the engine so they can be reported.
+    #     raise
     except:
         return True
 
@@ -2625,11 +2632,11 @@ def validate_arm_fields_required_for_adjustable_rate(
     subsequent_interest_rate_cap_change_up,
     lifetime_max_rate_ceiling,
     lifetime_min_rate_floor,
+    subsequent_payment_reset_period,
     negative_amortization_limit,
     initial_negative_amortization_recast_period,
     subsequent_negative_amortization_recast_period,
     initial_fixed_payment_period,
-    subsequent_payment_reset_period,
     initial_periodic_payment_cap,
     subsequent_periodic_payment_cap,
     initial_minimum_payment_reset_period,
@@ -2637,7 +2644,9 @@ def validate_arm_fields_required_for_adjustable_rate(
     option_arm_indicator,
 ):
     """
-    Returns True if Amortization Type is 2 and any ARM-only field is blank.
+    Returns True if Amortization Type is 2 and any core ARM field is blank.
+    Only core rate-structure fields are required for all ARMs; optional /
+    negative-amortization fields are left to other validations.
     Treats blank or NaN values as missing; zeros are considered present.
     """
     try:
@@ -2648,7 +2657,7 @@ def validate_arm_fields_required_for_adjustable_rate(
         if int(float(amortization_type)) != 2:
             return False
 
-        fields = [
+        core_fields = [
             arm_look_back_days,
             gross_margin,
             arm_round_flag,
@@ -2662,18 +2671,43 @@ def validate_arm_fields_required_for_adjustable_rate(
             subsequent_interest_rate_cap_change_up,
             lifetime_max_rate_ceiling,
             lifetime_min_rate_floor,
+            subsequent_payment_reset_period,
+        ]
+
+        if any(_is_blank(value) for value in core_fields):
+            return True
+
+        # Option ARM / negative amortization fields are optional for standard ARMs.
+        # If any of them are provided, ensure they are provided consistently.
+        option_fields = [
             negative_amortization_limit,
             initial_negative_amortization_recast_period,
             subsequent_negative_amortization_recast_period,
             initial_fixed_payment_period,
-            subsequent_payment_reset_period,
             initial_periodic_payment_cap,
             subsequent_periodic_payment_cap,
             initial_minimum_payment_reset_period,
             subsequent_minimum_payment_reset_period,
-            option_arm_indicator,
         ]
-        return any(_is_blank(value) for value in fields)
+        indicator_is_set = False
+        if not _is_blank(option_arm_indicator):
+            try:
+                indicator_is_set = float(option_arm_indicator) != 0
+            except Exception:
+                indicator_is_set = True
+
+        def _is_meaningful(value):
+            if _is_blank(value):
+                return False
+            try:
+                return float(value) != 0
+            except Exception:
+                return True
+
+        if indicator_is_set or any(_is_meaningful(value) for value in option_fields):
+            return any(_is_blank(value) for value in option_fields + [option_arm_indicator])
+
+        return False
     except:
         return True
 
