@@ -245,6 +245,8 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
                     )
             continue
 
+        exception_messages: dict[int, str] = {}
+
         def apply_rule(row: pd.Series) -> bool:
             try:
                 if varargs:
@@ -258,8 +260,8 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
             except Exception as exc:  # pragma: no cover - defensive
                 if isinstance(exc, bdb.BdbQuit):
                     raise
+                exception_messages[row.name] = f"{exc.__class__.__name__}: {exc}"
                 return True
-
         mask = tape_df.apply(apply_rule, axis=1)
         mask = mask.fillna(False).astype(bool)
         issue_count = int(mask.sum())
@@ -269,16 +271,18 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
             continue
 
         for row_index in mask[mask].index:
+            exception_detail = exception_messages.get(row_index)
             record: dict[str, object] = {
                 "rule": rule_name,
                 "row_index": row_index,
-                "columns": ", ".join(columns),
+                "columns": exception_detail or ", ".join(columns),
+                "exception": exception_detail,
             }
             if loan_number_column:
                 record["loan_number"] = tape_df.at[row_index, loan_number_column]
             issue_bucket.append(record)
 
-    issues_columns = ["rule", "row_index", "columns"]
+    issues_columns = ["rule", "row_index", "columns", "exception"]
     if loan_number_column:
         issues_columns.insert(2, "loan_number")
     issues_df = pd.DataFrame(issues, columns=issues_columns)
