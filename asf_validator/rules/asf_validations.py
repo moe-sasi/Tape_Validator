@@ -511,10 +511,16 @@ def validate_first_payment_date(first_payment_date_of_loan, origination_date):
     - or First Payment Date does not fall on the 1st day of the month.
     """
     try:
+        first_payment_dt = pd.to_datetime(first_payment_date_of_loan, errors="coerce")
+        origination_dt = pd.to_datetime(origination_date, errors="coerce")
+
+        if pd.isna(first_payment_dt) or pd.isna(origination_dt):
+            return True
+
         return (
             first_payment_date_of_loan == "" or
-            origination_date > first_payment_date_of_loan or
-            pd.to_datetime(first_payment_date_of_loan, errors="coerce").day != 1
+            origination_dt > first_payment_dt or
+            first_payment_dt.day != 1
         )
     except:
         return True
@@ -999,7 +1005,11 @@ def validate_valuation_age(original_property_valuation_date, origination_date):
     Returns True if there are 180 or more days between Valuation Date and Origination Date.
     """
     try:
-        return (origination_date - original_property_valuation_date).days >= 180
+        origination_dt = pd.to_datetime(origination_date, errors="coerce")
+        valuation_dt = pd.to_datetime(original_property_valuation_date, errors="coerce")
+        if pd.isna(origination_dt) or pd.isna(valuation_dt):
+            return True
+        return (origination_dt - valuation_dt).days >= 180
     except:
         return True
 
@@ -1013,7 +1023,11 @@ def validate_valuation_after_origination(original_property_valuation_date, origi
     Returns True if the Original Property Valuation Date occurs after the Origination Date.
     """
     try:
-        return original_property_valuation_date > origination_date
+        valuation_dt = pd.to_datetime(original_property_valuation_date, errors="coerce")
+        origination_dt = pd.to_datetime(origination_date, errors="coerce")
+        if pd.isna(valuation_dt) or pd.isna(origination_dt):
+            return True
+        return valuation_dt > origination_dt
     except:
         return True
 
@@ -1031,8 +1045,10 @@ def validate_original_appraisal_24_months_old(
     try:
         if pd.isna(original_property_valuation_date) or pd.isna(interest_paid_through_date):
             return True
-        valuation_date = pd.to_datetime(original_property_valuation_date)
-        paid_through_date = pd.to_datetime(interest_paid_through_date)
+        valuation_date = pd.to_datetime(original_property_valuation_date, errors="coerce")
+        paid_through_date = pd.to_datetime(interest_paid_through_date, errors="coerce")
+        if pd.isna(valuation_date) or pd.isna(paid_through_date):
+            return True
         cutoff_date = paid_through_date - pd.DateOffset(months=24)
         return valuation_date <= cutoff_date
     except:
@@ -1696,14 +1712,22 @@ def validate_liquid_reserves(liquid_cash_reserves, loan_type_ls):
 # df["flag_liquid_reserves"] = df.apply(lambda row: validate_liquid_reserves(row["Liquid / Cash Reserves"], row["LOAN_TYPE_LS"]), axis=1)
 
 # 79A. Zero Reserves for Primary/Second
-# Flag if Liquid / Cash Reserves is 0 and Occupancy is 1 (Primary) or 2 (Second Home)
-def validate_zero_reserves_primary_second(liquid_cash_reserves, occupancy):
+# Flag if Liquid / Cash Reserves is 0 and Occupancy is 1 (Primary) or 2 (Second Home),
+# except when the loan type is a Closed End Second product.
+def validate_zero_reserves_primary_second(liquid_cash_reserves, occupancy, loan_type_ls=None):
     """
-    Returns True if Liquid / Cash Reserves is 0 and Occupancy is 1 or 2.
+    Returns True if Liquid / Cash Reserves is 0, Occupancy is 1 or 2, and loan type does
+    not contain 'CLOSED END SECOND'. Zero reserves are acceptable for Closed End Second
+    products (e.g., 'REDWOOD CLOSED END SECOND 15 YR'), so those should not flag.
     """
     try:
         if _is_blank(liquid_cash_reserves) or _is_blank(occupancy):
             return False
+
+        loan_type = "" if loan_type_ls is None else str(loan_type_ls).upper()
+        if "CLOSED END SECOND" in loan_type:
+            return False
+
         reserves = float(liquid_cash_reserves)
         occ = int(float(occupancy))
         return reserves == 0 and occ in (1, 2)
@@ -1711,7 +1735,11 @@ def validate_zero_reserves_primary_second(liquid_cash_reserves, occupancy):
         return True
 
 # df["flag_zero_reserves_primary_second"] = df.apply(
-#     lambda row: validate_zero_reserves_primary_second(row["Liquid / Cash Reserves"], row["Occupancy"]),
+#     lambda row: validate_zero_reserves_primary_second(
+#         row["Liquid / Cash Reserves"],
+#         row["Occupancy"],
+#         row.get("LOAN_TYPE_LS"),
+#     ),
 #     axis=1,
 # )
 
@@ -1752,6 +1780,7 @@ def validate_all_borrower_total_income(all_borrower_total_income):
     """
     Returns True if All Borrower Total Income is blank or less than or equal to 0.
     """
+    # breakpoint();
     try:
         return all_borrower_total_income in ["", None] or float(all_borrower_total_income) <= 0
     except:
@@ -1879,13 +1908,11 @@ def validate_application_date(application_received_date, origination_date):
     from datetime import datetime
     import pandas as pd
     
-    orig_arc = application_received_date
-    orig_od = origination_date
-
-    application_received_date = pd.to_datetime(application_received_date)
-    origination_date = pd.to_datetime(origination_date)
     try:
-        if (application_received_date == "") or (pd.isna(application_received_date)):
+        application_received_date = pd.to_datetime(application_received_date, errors="coerce")
+        origination_date = pd.to_datetime(origination_date, errors="coerce")
+
+        if pd.isna(application_received_date) or pd.isna(origination_date):
             return True
         if application_received_date > origination_date:
             return True
@@ -2031,13 +2058,16 @@ def validate_apor_safe_harbor(application_date, atrqm_status):
     from datetime import datetime
     import pandas as pd
     
-    application_date = pd.to_datetime(application_date)
+    application_date = pd.to_datetime(application_date, errors="coerce")
     
     try:
         check_str = str(atrqm_status).upper()
         safe_harbor_start = datetime(2014, 1, 10)
         safe_harbor_end = datetime(2021, 6, 30)
         apor_start = datetime(2021, 7, 1)
+
+        if pd.isna(application_date):
+            return True
 
         if safe_harbor_start <= application_date <= safe_harbor_end:
             return "SAFE HARBOR" not in check_str
@@ -2140,7 +2170,11 @@ def validate_first_payment_before_maturity(first_payment_date, maturity_date):
     Returns True if First Payment Date is after Maturity Date.
     """
     try:
-        return first_payment_date > maturity_date
+        first_payment_dt = pd.to_datetime(first_payment_date, errors="coerce")
+        maturity_dt = pd.to_datetime(maturity_date, errors="coerce")
+        if pd.isna(first_payment_dt) or pd.isna(maturity_dt):
+            return True
+        return first_payment_dt > maturity_dt
     except:
         return True
 
@@ -2155,7 +2189,7 @@ def validate_maturity_date_first_of_month(maturity_date):
     - or Maturity Date does not fall on the 1st day of the month.
     """
     try:
-        return maturity_date == "" or maturity_date.day != 1
+        return maturity_date == "" or pd.to_datetime(maturity_date, errors="coerce").day != 1
     except:
         return True
 
@@ -2212,8 +2246,9 @@ def validate_age_zero_current_balance_diff(
         if interest_paid_through_date in ["", None] or pd.isna(interest_paid_through_date):
             return True
 
-        maturity_dt = pd.to_datetime(maturity_date)
-        paid_through_dt = pd.to_datetime(interest_paid_through_date)
+        maturity_dt = pd.to_datetime(maturity_date, errors="coerce")
+        paid_through_dt = pd.to_datetime(interest_paid_through_date, errors="coerce")
+    
         if pd.isna(maturity_dt) or pd.isna(paid_through_dt):
             return True
         months_between = (maturity_dt.year - paid_through_dt.year) * 12 + (
@@ -2676,10 +2711,10 @@ def validate_application_received_vs_first_payment(
         if application_received_date in ["", None] or first_payment_date_of_loan in ["", None]:
             return False
 
-        app_dt = pd.to_datetime(application_received_date)
-        first_pay_dt = pd.to_datetime(first_payment_date_of_loan)
+        app_dt = pd.to_datetime(application_received_date, errors="coerce")
+        first_pay_dt = pd.to_datetime(first_payment_date_of_loan, errors="coerce")
         if pd.isna(app_dt) or pd.isna(first_pay_dt):
-            return False
+            return True
 
         return (
             first_pay_dt >= app_dt + pd.DateOffset(years=2)

@@ -39,6 +39,13 @@ def write_report(results: Mapping[str, Any], output_path: Path) -> None:
 
     issues = results.get("issues", [])
     issues_df = issues if isinstance(issues, pd.DataFrame) else pd.DataFrame(issues)
+    missing_required_fields = results.get("missing_required_fields", [])
+    if isinstance(missing_required_fields, pd.DataFrame):
+        missing_required_fields_df = missing_required_fields
+    else:
+        missing_required_fields_df = pd.DataFrame(
+            missing_required_fields, columns=["Missing Required Field", "Loan Number"]
+        )
     warnings = results.get("warnings", [])
     warnings_df = warnings if isinstance(warnings, pd.DataFrame) else pd.DataFrame(warnings)
     rule_summary_df = results.get("rule_summary")
@@ -55,7 +62,7 @@ def write_report(results: Mapping[str, Any], output_path: Path) -> None:
                 .drop(columns=["_issue_count_sort"])
             )
 
-    issue_count = len(issues_df)
+    issue_count = len(issues_df) + len(missing_required_fields_df)
     warning_count = len(warnings_df)
     executed_rules = 0
     if isinstance(rule_summary_df, pd.DataFrame):
@@ -91,6 +98,11 @@ def write_report(results: Mapping[str, Any], output_path: Path) -> None:
             _autofit_columns(writer, "rule_summary", rule_summary_output)
         summary_df.to_excel(writer, index=False, sheet_name="summary")
         _autofit_columns(writer, "summary", summary_df)
+        if isinstance(missing_required_fields_df, pd.DataFrame):
+            missing_required_fields_df.to_excel(
+                writer, index=False, sheet_name="missing_required_fields"
+            )
+            _autofit_columns(writer, "missing_required_fields", missing_required_fields_df)
         if isinstance(issues_df, pd.DataFrame):
             issues_df.to_excel(writer, index=False, sheet_name="issues")
             _autofit_columns(writer, "issues", issues_df)

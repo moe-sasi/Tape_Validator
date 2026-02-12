@@ -130,6 +130,7 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
     normalized_map, canonical_map = _build_column_maps(tape_df.columns)
     issues: list[dict[str, object]] = []
     warnings: list[dict[str, object]] = []
+    missing_required_records: list[dict[str, object]] = []
     rule_summary: list[dict[str, object]] = []
     warning_summary: list[dict[str, object]] = []
     skipped_rules: list[dict[str, str]] = []
@@ -224,22 +225,24 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
 
             issue_mask = tape_df.apply(apply_missing_required, axis=1)
             issue_mask = issue_mask.fillna(False).astype(bool)
-            issue_count = int(issue_mask.sum())
-            summary_bucket.append({"rule": rule_name, "issue_count": issue_count})
+            missing_per_row = tape_df[issue_mask].apply(collect_missing_required, axis=1)
+            missing_record_count = int(sum(len(missing) for missing in missing_per_row))
+            summary_bucket.append({"rule": rule_name, "issue_count": missing_record_count})
 
-            if issue_count == 0:
+            if missing_record_count == 0:
                 continue
 
-            missing_per_row = tape_df[issue_mask].apply(collect_missing_required, axis=1)
             for row_index in missing_per_row.index:
-                record: dict[str, object] = {
-                    "rule": rule_name,
-                    "row_index": row_index,
-                    "columns": ", ".join(missing_per_row.at[row_index]),
-                }
-                if loan_number_column:
-                    record["loan_number"] = tape_df.at[row_index, loan_number_column]
-                issue_bucket.append(record)
+                loan_number_value = (
+                    tape_df.at[row_index, loan_number_column] if loan_number_column else None
+                )
+                for missing_field in missing_per_row.at[row_index]:
+                    missing_required_records.append(
+                        {
+                            "Missing Required Field": missing_field,
+                            "Loan Number": loan_number_value,
+                        }
+                    )
             continue
 
         def apply_rule(row: pd.Series) -> bool:
@@ -280,6 +283,9 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
         issues_columns.insert(2, "loan_number")
     issues_df = pd.DataFrame(issues, columns=issues_columns)
     warnings_df = pd.DataFrame(warnings, columns=issues_columns)
+    missing_required_fields_df = pd.DataFrame(
+        missing_required_records, columns=["Missing Required Field", "Loan Number"]
+    )
     rule_summary_df = pd.DataFrame(rule_summary)
     if not rule_summary_df.empty:
         rule_summary_df = rule_summary_df.sort_values("rule").reset_index(drop=True)
@@ -306,6 +312,7 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
         "columns": list(tape_df.columns),
         "issues": issues_df,
         "warnings": warnings_df,
+        "missing_required_fields": missing_required_fields_df,
         "rule_summary": rule_summary_df,
         "warning_summary": warning_summary_df,
         "skipped_rules": skipped_rules_df,
