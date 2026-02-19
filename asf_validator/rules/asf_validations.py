@@ -65,6 +65,109 @@ def _parse_date_value(value):
         return None
 
 
+def _parse_percent_like_value(value):
+    """Return a float for percent-like values or None for blanks."""
+    if _is_blank(value):
+        return None
+    if isinstance(value, str):
+        cleaned = value.strip().replace(",", "").replace("%", "")
+        if cleaned == "":
+            return None
+        return float(cleaned)
+    return float(value)
+
+
+_PERCENT_OVER_ONE_EXCLUDED_FIELDS = {
+    "subsequent_interest_rate_reset_period",
+    "subsequent_interest_rate_cap_change_down",
+    "subsequent_interest_rate_cap_change_up",
+    "subsequent_payment_reset_period",
+    "mortgage_insurance_percent",
+}
+
+
+def validate_percentage_fields_over_one(
+    servicing_fee=None,
+    original_interest_rate=None,
+    current_interest_rate=None,
+    gross_margin=None,
+    initial_interest_rate_cap_change_up=None,
+    initial_interest_rate_cap_change_down=None,
+    subsequent_interest_rate_reset_period=None,
+    subsequent_interest_rate_cap_change_down=None,
+    subsequent_interest_rate_cap_change_up=None,
+    lifetime_max_rate_ceiling=None,
+    lifetime_min_rate_floor=None,
+    originator_dti=None,
+    fully_indexed_rate=None,
+    percentage_of_down_payment_from_borrower_own_funds=None,
+    original_avm_confidence_score=None,
+    most_recent_avm_confidence_score=None,
+    original_cltv=None,
+    original_ltv=None,
+    mortgage_insurance_percent=None,
+    pool_insurance_stop_loss=None,
+    updated_dti_front_end=None,
+    updated_dti_back_end=None,
+    pre_modification_interest_note_rate=None,
+    pre_modification_initial_interest_rate_change_downward_cap=None,
+    pre_modification_subsequent_interest_rate_cap=None,
+    rate_change_cap_up=None,
+    rate_change_cap_down=None,
+    subsequent_payment_reset_period=None,
+    initial_periodic_payment_cap=None,
+    subsequent_periodic_payment_cap=None,
+):
+    """
+    Returns True when any populated percent/rate-style field is greater than 1.
+
+    These fields should be provided as decimal ratios (for example, 0.10875 for
+    10.875%), except for explicitly excluded fields.
+    """
+    percent_like_values = [
+        ("servicing_fee", servicing_fee),
+        ("original_interest_rate", original_interest_rate),
+        ("current_interest_rate", current_interest_rate),
+        ("gross_margin", gross_margin),
+        ("initial_interest_rate_cap_change_up", initial_interest_rate_cap_change_up),
+        ("initial_interest_rate_cap_change_down", initial_interest_rate_cap_change_down),
+        ("subsequent_interest_rate_reset_period", subsequent_interest_rate_reset_period),
+        ("subsequent_interest_rate_cap_change_down", subsequent_interest_rate_cap_change_down),
+        ("subsequent_interest_rate_cap_change_up", subsequent_interest_rate_cap_change_up),
+        ("lifetime_max_rate_ceiling", lifetime_max_rate_ceiling),
+        ("lifetime_min_rate_floor", lifetime_min_rate_floor),
+        ("originator_dti", originator_dti),
+        ("fully_indexed_rate", fully_indexed_rate),
+        ("percentage_of_down_payment_from_borrower_own_funds", percentage_of_down_payment_from_borrower_own_funds),
+        ("original_avm_confidence_score", original_avm_confidence_score),
+        ("most_recent_avm_confidence_score", most_recent_avm_confidence_score),
+        ("original_cltv", original_cltv),
+        ("original_ltv", original_ltv),
+        ("mortgage_insurance_percent", mortgage_insurance_percent),
+        ("pool_insurance_stop_loss", pool_insurance_stop_loss),
+        ("updated_dti_front_end", updated_dti_front_end),
+        ("updated_dti_back_end", updated_dti_back_end),
+        ("pre_modification_interest_note_rate", pre_modification_interest_note_rate),
+        ("pre_modification_initial_interest_rate_change_downward_cap", pre_modification_initial_interest_rate_change_downward_cap),
+        ("pre_modification_subsequent_interest_rate_cap", pre_modification_subsequent_interest_rate_cap),
+        ("rate_change_cap_up", rate_change_cap_up),
+        ("rate_change_cap_down", rate_change_cap_down),
+        ("subsequent_payment_reset_period", subsequent_payment_reset_period),
+        ("initial_periodic_payment_cap", initial_periodic_payment_cap),
+        ("subsequent_periodic_payment_cap", subsequent_periodic_payment_cap),
+    ]
+    try:
+        for field_name, value in percent_like_values:
+            if field_name in _PERCENT_OVER_ONE_EXCLUDED_FIELDS:
+                continue
+            parsed = _parse_percent_like_value(value)
+            if parsed is not None and parsed > 1:
+                return True
+        return False
+    except Exception:
+        return True
+
+
 def validate_missing_required_fields(
     originator_doc_code,
     primary_servicer,
@@ -138,7 +241,6 @@ def validate_missing_required_fields(
     Length of Employment: Co-Borrower is required only when Total Number of
     Borrowers is greater than 1.
     """
-
     required_values = [
         originator_doc_code,
         primary_servicer,
@@ -1045,30 +1147,41 @@ def validate_valuation_after_origination(original_property_valuation_date, origi
 # df["flag_valuation_after_origination"] = df.apply(lambda row: validate_valuation_after_origination(row["Original Property Valuation Date"], row["Origination Date"]), axis=1)
 
 # 46a. Original Appraisal 24+ months old
-# Flag if Original Property Valuation Date is 24 months or older than Interest Paid Through Date
+# Flag if the most recent of Original/Most Recent Property Valuation Date
+# is 24 months or older than Interest Paid Through Date.
 def validate_original_appraisal_24_months_old(
     original_property_valuation_date,
     interest_paid_through_date,
+    most_recent_valuation_date=None,
+    most_recent_property_valuation_date=None,
 ):
     """
-    Returns True if Original Property Valuation Date is 24 months or older than Interest Paid Through Date.
+    Returns True if the most recent populated valuation date
+    (Original Property Valuation Date, Most Recent Valuation Date,
+    or Most Recent Property Valuation Date)
+    is 24 months or older than Interest Paid Through Date.
     """
     try:
-        if pd.isna(original_property_valuation_date) or pd.isna(interest_paid_through_date):
+        paid_through_date = _parse_date_value(interest_paid_through_date)
+        if paid_through_date is None:
             return True
-        
-        valuation_date = pd.to_datetime(original_property_valuation_date, errors="coerce")
-        paid_through_date = pd.to_datetime(interest_paid_through_date, errors="coerce")
 
-        if pd.isna(valuation_date) or pd.isna(paid_through_date):
+        valuation_dates = [
+            dt
+            for dt in (
+                _parse_date_value(original_property_valuation_date),
+                _parse_date_value(most_recent_valuation_date),
+                _parse_date_value(most_recent_property_valuation_date),
+            )
+            if dt is not None
+        ]
+        if not valuation_dates:
             return True
-        
+
+        valuation_date = max(valuation_dates)
         cutoff_date = paid_through_date - pd.DateOffset(months=24)
 
         return valuation_date <= cutoff_date
-    # except Exception:
-    #     # Surface unexpected exceptions to the engine so they can be reported.
-    #     raise
     except:
         return True
 

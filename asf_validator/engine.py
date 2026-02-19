@@ -10,7 +10,11 @@ from typing import Iterable
 import pandas as pd
 
 from asf_validator.rules import get_validations_registry
-from asf_validator.rules.asf_validations import _is_blank
+from asf_validator.rules.asf_validations import (
+    _PERCENT_OVER_ONE_EXCLUDED_FIELDS,
+    _is_blank,
+    _parse_percent_like_value,
+)
 from asf_validator.util import normalize_columns
 
 _LOGGER = logging.getLogger(__name__)
@@ -191,8 +195,9 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
             for param in params:
                 resolved = _resolve_param_name(param.name, normalized_map, canonical_map)
                 if resolved is None:
-                    missing.append(param.name)
                     param_columns.append(None)
+                    if param.default is inspect.Parameter.empty:
+                        missing.append(param.name)
                 else:
                     columns.append(resolved)
                     param_columns.append(resolved)
@@ -273,6 +278,52 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
                             "Loan Number": loan_number_value,
                         }
                     )
+            continue
+
+        if rule_name == "validate_percentage_fields_over_one" and not varargs:
+            candidate_columns = [column for column in param_columns if column is not None]
+            # Preserve column order while removing duplicates from alias resolution.
+            columns = [
+                column
+                for column in dict.fromkeys(candidate_columns)
+                if _normalize_name(column) not in _PERCENT_OVER_ONE_EXCLUDED_FIELDS
+            ]
+
+            def collect_percent_over_one(row: pd.Series) -> list[str]:
+                failing_columns: list[str] = []
+                for column in columns:
+                    try:
+                        parsed = _parse_percent_like_value(row[column])
+                        if parsed is not None and parsed > 1:
+                            failing_columns.append(column)
+                    except Exception:
+                        failing_columns.append(column)
+                return failing_columns
+
+            failing_columns_per_row = tape_df.apply(collect_percent_over_one, axis=1)
+            issue_count = int(sum(len(failing_columns) for failing_columns in failing_columns_per_row))
+            summary_bucket.append({"rule": rule_name, "issue_count": issue_count})
+
+            if issue_count == 0:
+                continue
+
+            for row_index in failing_columns_per_row.index:
+                row_failing_columns = failing_columns_per_row.at[row_index]
+                if not row_failing_columns:
+                    continue
+                loan_number_value = (
+                    tape_df.at[row_index, loan_number_column] if loan_number_column else None
+                )
+                for failing_column in row_failing_columns:
+                    record: dict[str, object] = {
+                        "rule": rule_name,
+                        "row_index": row_index,
+                        "columns": failing_column,
+                        "exception": None,
+                    }
+                    if loan_number_column:
+                        record["loan_number"] = loan_number_value
+                    issue_bucket.append(record)
             continue
 
         exception_messages: dict[int, str] = {}
