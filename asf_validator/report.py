@@ -88,6 +88,32 @@ def _build_validation_legend_df() -> pd.DataFrame:
     return legend_df
 
 
+def _build_field_min_max_df(tape_df: pd.DataFrame) -> pd.DataFrame:
+    """Build per-field min/max summary for the input tape."""
+    rows: list[dict[str, object]] = []
+    for column in tape_df.columns:
+        series = tape_df[column]
+        non_null = series.dropna()
+        if non_null.empty:
+            min_value: object = None
+            max_value: object = None
+        else:
+            non_blank = non_null[~non_null.apply(lambda value: isinstance(value, str) and value.strip() == "")]
+            if non_blank.empty:
+                min_value = None
+                max_value = None
+            else:
+                try:
+                    min_value = non_blank.min()
+                    max_value = non_blank.max()
+                except TypeError:
+                    as_text = non_blank.astype(str)
+                    min_value = as_text.min()
+                    max_value = as_text.max()
+        rows.append({"field": column, "min_value": min_value, "max_value": max_value})
+    return pd.DataFrame(rows, columns=["field", "min_value", "max_value"])
+
+
 def write_report(results: Mapping[str, Any], output_path: Path) -> None:
     """Write validation results to an Excel report.
 
@@ -110,6 +136,12 @@ def write_report(results: Mapping[str, Any], output_path: Path) -> None:
     rule_summary_df = results.get("rule_summary")
     warning_summary_df = results.get("warning_summary")
     skipped_rules_df = results.get("skipped_rules")
+    tape_df = results.get("tape_df")
+    field_min_max_df = (
+        _build_field_min_max_df(tape_df)
+        if isinstance(tape_df, pd.DataFrame)
+        else pd.DataFrame(columns=["field", "min_value", "max_value"])
+    )
     rule_summary_output = rule_summary_df
     if isinstance(rule_summary_df, pd.DataFrame) and "issue_count" in rule_summary_df.columns:
         issue_counts = pd.to_numeric(rule_summary_df["issue_count"], errors="coerce").fillna(0)
@@ -160,6 +192,9 @@ def write_report(results: Mapping[str, Any], output_path: Path) -> None:
             _autofit_columns(writer, "issues", issues_df)
         summary_df.to_excel(writer, index=False, sheet_name="summary")
         _autofit_columns(writer, "summary", summary_df)
+        if isinstance(field_min_max_df, pd.DataFrame):
+            field_min_max_df.to_excel(writer, index=False, sheet_name="field_min_max")
+            _autofit_columns(writer, "field_min_max", field_min_max_df)
         if isinstance(missing_required_fields_df, pd.DataFrame):
             missing_required_fields_df.to_excel(
                 writer, index=False, sheet_name="missing_required_fields"

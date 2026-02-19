@@ -44,6 +44,7 @@ def run(
     logging.info("Running validations")
     results = run_validations(tape_df)
     results["generated_at"] = run_timestamp
+    results["tape_df"] = tape_df
     logging.info("Writing report to %s", output_path)
     write_report(results, output_path)
     logging.info("Validation complete")
