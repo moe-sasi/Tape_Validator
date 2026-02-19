@@ -22,6 +22,15 @@ def _is_blank(value):
     return False
 
 
+def _requires_co_borrower_employment(total_number_of_borrowers):
+    try:
+        if _is_blank(total_number_of_borrowers):
+            return False
+        return float(total_number_of_borrowers) > 1
+    except Exception:
+        return False
+
+
 def _is_years_value_invalid(value, max_years=60):
     """Return True when a populated years-based value is non-numeric or out of range."""
     try:
@@ -126,6 +135,8 @@ def validate_missing_required_fields(
     """
     Returns True if any required field is blank (empty, None, NaN, or whitespace).
     Numeric zero values (0 / 0.0) are treated as populated.
+    Length of Employment: Co-Borrower is required only when Total Number of
+    Borrowers is greater than 1.
     """
 
     required_values = [
@@ -188,7 +199,6 @@ def validate_missing_required_fields(
         original_cltv,
         original_ltv,
         length_of_employment_borrower,
-        length_of_employment_co_borrower,
         maturity_date,
         loan_type_ls,
         atrqm_status,
@@ -196,6 +206,8 @@ def validate_missing_required_fields(
         dd_firm,
         dd_review_type
     ]
+    if _requires_co_borrower_employment(total_number_of_borrowers):
+        required_values.append(length_of_employment_co_borrower)
     # breakpoint(); # For debugging purposes
     return any(_is_blank(value) for value in required_values)
 
@@ -1378,17 +1390,31 @@ def validate_prepayment_penalty_type(prepayment_penalty_type, prepayment_penalty
 
 # 62. Prepayment Term
 # Flag if Prepayment Term is missing or not in allowed set when Amortization Type is 2
-def validate_prepayment_term(amortization_type, prepayment_penalty_total_term):
+# and the loan has a prepayment penalty.
+def validate_prepayment_term(
+    amortization_type,
+    prepayment_penalty_total_term,
+    prepayment_penalty_calculation,
+):
     """
-    Returns True if Amortization Type is 2 and Prepayment Term is missing or not in {60,48,36,24,12,18}.
+    Returns True if Amortization Type is 2, the loan has a prepayment penalty
+    (Prepayment Penalty Calculation is not 0), and Prepayment Term is missing
+    or not in {60,48,36,24,12,18}.
     """
     valid_terms = {60, 48, 36, 24, 12, 18}
     try:
-        return amortization_type == 2 and (prepayment_penalty_total_term in ["", None] or int(prepayment_penalty_total_term) not in valid_terms)
+        if _is_blank(prepayment_penalty_calculation):
+            return False
+        if float(prepayment_penalty_calculation) == 0:
+            return False
+        return amortization_type == 2 and (
+            prepayment_penalty_total_term in ["", None]
+            or int(prepayment_penalty_total_term) not in valid_terms
+        )
     except:
         return True
 
-# df["flag_prepayment_term"] = df.apply(lambda row: validate_prepayment_term(row["Amortization Type"], row["Prepayment Penalty Total Term"]), axis=1)
+# df["flag_prepayment_term"] = df.apply(lambda row: validate_prepayment_term(row["Amortization Type"], row["Prepayment Penalty Total Term"], row["Prepayment Penalty Calculation"]), axis=1)
 
 # 64. Initial Period Cap
 # Flag if either Initial Cap Up or Down is blank when Amortization Type is 2
@@ -2244,6 +2270,7 @@ def validate_age_zero_current_balance_diff(
     - Age = Original Amortization Term - months_between(Maturity Date, Interest Paid Through Date) equals 0,
     - AND Current Loan Amount != Original Loan Amount.
     """
+    
     try:
         if original_amortization_term in ["", None] or pd.isna(original_amortization_term):
             return True
@@ -2352,7 +2379,7 @@ def validate_subsequent_interest_rate_reset_period_range(
 # Flag if Initial Fixed Payment Period is missing or out of range when Amortization Type is 2
 def validate_initial_fixed_payment_period_range(
     amortization_type,
-    initial_fixed_payment_period,
+    initial_fixed_rate_period,
 ):
     """
     Returns True if Amortization Type is 2 and Initial Fixed Payment Period is blank
@@ -2363,9 +2390,9 @@ def validate_initial_fixed_payment_period_range(
             return False
         if int(float(amortization_type)) != 2:
             return False
-        if _is_blank(initial_fixed_payment_period):
+        if _is_blank(initial_fixed_rate_period):
             return True
-        value = float(initial_fixed_payment_period)
+        value = float(initial_fixed_rate_period)
         if not value.is_integer():
             return True
         value = int(value)

@@ -76,6 +76,15 @@ _CANONICAL_REPLACEMENTS = {
 _STOPWORDS = {"of", "the", "and", "or", "at", "in", "for", "to", "from"}
 
 
+def _requires_co_borrower_employment(total_number_of_borrowers: object) -> bool:
+    try:
+        if _is_blank(total_number_of_borrowers):
+            return False
+        return float(total_number_of_borrowers) > 1
+    except Exception:
+        return False
+
+
 def _normalize_name(name: str) -> str:
     return normalize_columns([name])[0]
 
@@ -207,6 +216,25 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
                     display_columns.append(_PARAM_ALIASES.get(param.name, param.name))
                 else:
                     display_columns.append(resolved)
+            total_borrowers_param_index = next(
+                (
+                    index
+                    for index, param in enumerate(params)
+                    if param.name == "total_number_of_borrowers"
+                ),
+                None,
+            )
+
+            def is_conditionally_required(param_name: str, row: pd.Series) -> bool:
+                if param_name != "length_of_employment_co_borrower":
+                    return True
+                if total_borrowers_param_index is None:
+                    return False
+                total_borrowers_column = param_columns[total_borrowers_param_index]
+                total_borrowers_value = (
+                    row[total_borrowers_column] if total_borrowers_column is not None else None
+                )
+                return _requires_co_borrower_employment(total_borrowers_value)
 
             def apply_missing_required(row: pd.Series) -> bool:
                 values = [
@@ -217,7 +245,9 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
 
             def collect_missing_required(row: pd.Series) -> list[str]:
                 missing_columns: list[str] = []
-                for resolved, display in zip(param_columns, display_columns):
+                for param, resolved, display in zip(params, param_columns, display_columns):
+                    if not is_conditionally_required(param.name, row):
+                        continue
                     value = row[resolved] if resolved is not None else None
                     if _is_blank(value):
                         missing_columns.append(display)
