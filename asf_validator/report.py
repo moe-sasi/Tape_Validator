@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 import pandas as pd
 
@@ -25,6 +25,63 @@ _ACRONYM_OVERRIDES = {
     "io": "IO",
     "atrqm": "ATRQM",
 }
+
+_UNIQUE_VALUE_SUMMARY_FIELDS = (
+    "Primary Servicer",
+    "Servicing Fee %",
+    "Amortization Type",
+    "Lien Position",
+    "HELOC Indicator",
+    "Loan Purpose",
+    "Broker Indicator",
+    "Channel",
+    "Escrow Indicator",
+    "Original Amortization Term",
+    "Original Term to Maturity",
+    "Interest Type Indicator",
+    "Original Interest Only Term",
+    "Buy Down Period",
+    "HELOC Draw Period",
+    "Interest Paid Through Date",
+    "Current Payment Status",
+    "Index Type",
+    "ARM Look-back Days",
+    "ARM Round Flag",
+    "ARM Round Factor",
+    "Initial Fixed Rate Period",
+    "Initial Interest Rate Cap (Change Up)",
+    "Subsequent Interest Rate Reset Period",
+    "Subsequent Interest Rate Cap (Change Down)",
+    "Subsequent Interest Rate Cap (Change Up)",
+    "Subsequent Payment Reset Period",
+    "Prepayment Penalty Calculation",
+    "Prepayment Penalty Type",
+    "Prepayment Penalty Total Term",
+    "Prepayment Penalty Hard Term",
+    "Number of Mortgaged Properties",
+    "Total Number of Borrowers",
+    "Self-employment Flag",
+    "FICO Model Used",
+    "Original Primary Borrower FICO",
+    "Most Recent Primary Borrower FICO",
+    "4506-T Indicator",
+    "Borrower Income Verification Level",
+    "Borrower Employment Verification",
+    "Co-Borrower Employment Verification",
+    "Borrower Asset Verification",
+    "Co-Borrower Asset Verification",
+    "Property Type",
+    "Occupancy",
+    "Original Property Valuation Type",
+    "Original Pledged Assets",
+    "Mortgage Insurance Company Name",
+    "Mortgage Insurance Percent",
+    "Originator Doc Code",
+    "LOAN_TYPE_LS",
+    "ATRQMStatus",
+    "DD Firm",
+    "DD Review Type",
+)
 
 
 def _autofit_columns(writer: pd.ExcelWriter, sheet_name: str, df: pd.DataFrame) -> None:
@@ -88,10 +145,32 @@ def _build_validation_legend_df() -> pd.DataFrame:
     return legend_df
 
 
-def _build_field_min_max_df(tape_df: pd.DataFrame) -> pd.DataFrame:
+def _normalize_field_name_for_match(value: str) -> str:
+    """Normalize field names for case-insensitive, whitespace-robust matching."""
+    return " ".join(str(value).strip().lower().split())
+
+
+def _build_field_lookup(columns: pd.Index) -> dict[str, str]:
+    """Build a normalized name -> source column map."""
+    lookup: dict[str, str] = {}
+    for column in columns:
+        lookup.setdefault(_normalize_field_name_for_match(column), column)
+    return lookup
+
+
+def _build_field_min_max_df(
+    tape_df: pd.DataFrame,
+    excluded_fields: Iterable[str] | None = None,
+) -> pd.DataFrame:
     """Build per-field min/max summary for the input tape."""
+    excluded = {
+        _normalize_field_name_for_match(field_name)
+        for field_name in (excluded_fields or [])
+    }
     rows: list[dict[str, object]] = []
     for column in tape_df.columns:
+        if _normalize_field_name_for_match(column) in excluded:
+            continue
         series = tape_df[column]
         non_null = series.dropna()
         if non_null.empty:
@@ -112,6 +191,34 @@ def _build_field_min_max_df(tape_df: pd.DataFrame) -> pd.DataFrame:
                     max_value = as_text.max()
         rows.append({"field": column, "min_value": min_value, "max_value": max_value})
     return pd.DataFrame(rows, columns=["field", "min_value", "max_value"])
+
+
+def _build_field_unique_values_df(
+    tape_df: pd.DataFrame,
+    fields: Iterable[str],
+) -> pd.DataFrame:
+    """Build a per-field unique value summary for selected fields."""
+    rows: list[dict[str, object]] = []
+    field_lookup = _build_field_lookup(tape_df.columns)
+
+    for requested_field in fields:
+        source_column = field_lookup.get(_normalize_field_name_for_match(requested_field))
+        if source_column is None:
+            rows.append({"field": requested_field, "unique_value": None})
+            continue
+
+        series = tape_df[source_column]
+        non_null = series.dropna()
+        non_blank = non_null[~non_null.apply(lambda value: isinstance(value, str) and value.strip() == "")]
+
+        if non_blank.empty:
+            rows.append({"field": requested_field, "unique_value": None})
+            continue
+
+        for unique_value in pd.unique(non_blank):
+            rows.append({"field": requested_field, "unique_value": unique_value})
+
+    return pd.DataFrame(rows, columns=["field", "unique_value"])
 
 
 def write_report(results: Mapping[str, Any], output_path: Path) -> None:
@@ -137,8 +244,13 @@ def write_report(results: Mapping[str, Any], output_path: Path) -> None:
     warning_summary_df = results.get("warning_summary")
     skipped_rules_df = results.get("skipped_rules")
     tape_df = results.get("tape_df")
+    field_unique_values_df = (
+        _build_field_unique_values_df(tape_df, _UNIQUE_VALUE_SUMMARY_FIELDS)
+        if isinstance(tape_df, pd.DataFrame)
+        else pd.DataFrame(columns=["field", "unique_value"])
+    )
     field_min_max_df = (
-        _build_field_min_max_df(tape_df)
+        _build_field_min_max_df(tape_df, excluded_fields=_UNIQUE_VALUE_SUMMARY_FIELDS)
         if isinstance(tape_df, pd.DataFrame)
         else pd.DataFrame(columns=["field", "min_value", "max_value"])
     )
@@ -195,6 +307,9 @@ def write_report(results: Mapping[str, Any], output_path: Path) -> None:
         if isinstance(field_min_max_df, pd.DataFrame):
             field_min_max_df.to_excel(writer, index=False, sheet_name="field_min_max")
             _autofit_columns(writer, "field_min_max", field_min_max_df)
+        if isinstance(field_unique_values_df, pd.DataFrame):
+            field_unique_values_df.to_excel(writer, index=False, sheet_name="field_unique_values")
+            _autofit_columns(writer, "field_unique_values", field_unique_values_df)
         if isinstance(missing_required_fields_df, pd.DataFrame):
             missing_required_fields_df.to_excel(
                 writer, index=False, sheet_name="missing_required_fields"

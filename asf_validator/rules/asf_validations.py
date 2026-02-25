@@ -2340,6 +2340,41 @@ def validate_maturity_date_first_of_month(maturity_date):
 
 # df["flag_maturity_date_first_of_month"] = df["Maturity Date"].apply(validate_maturity_date_first_of_month)
 
+# 104B. Original Term to Maturity Date Gap
+# Flag if months_between(First Payment Date of Loan, Maturity Date) + 1
+# differs from Original Term to Maturity by at least 1 month.
+def validate_original_term_to_maturity_date_gap(
+    first_payment_date_of_loan,
+    maturity_date,
+    original_term_to_maturity,
+):
+    """
+    Returns True if the absolute difference between:
+    - months_between(First Payment Date of Loan, Maturity Date) + 1
+    - and Original Term to Maturity
+    is greater than or equal to 1 month.
+    """
+    try:
+        first_payment_dt = _parse_date_value(first_payment_date_of_loan)
+        maturity_dt = _parse_date_value(maturity_date)
+        if first_payment_dt is None or maturity_dt is None:
+            return True
+
+        if _is_blank(original_term_to_maturity):
+            return True
+
+        term_to_maturity = float(original_term_to_maturity)
+        months_between = (maturity_dt.year - first_payment_dt.year) * 12 + (
+            maturity_dt.month - first_payment_dt.month
+        )
+        derived_term_to_maturity = months_between + 1
+        return abs(derived_term_to_maturity - term_to_maturity) >= 1
+    except:
+        return True
+
+# df["flag_original_term_to_maturity_date_gap"] = df.apply(lambda row: validate_original_term_to_maturity_date_gap(
+#     row["First Payment Date of Loan"], row["Maturity Date"], row["Original Term to Maturity"]), axis=1)
+
 # 105. Negative incomes
 # Flag if any income value is negative
 def validate_negative_incomes(*incomes):
