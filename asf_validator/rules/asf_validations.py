@@ -1113,20 +1113,27 @@ def validate_original_ltv(original_loan_amount, sales_price, original_appraised_
 
 # 44. 180 Days Between Valuation and Origination
 # Flag if more than 180 days between Original Property Valuation Date and Origination Date
-def validate_valuation_age(original_property_valuation_date, origination_date):
+def validate_valuation_age(
+    original_property_valuation_date,
+    origination_date,
+    most_recent_property_valuation_date=None,
+):
     """
     Returns True if there are 180 or more days between Valuation Date and Origination Date.
+    Falls back to Most Recent Property Valuation Date when Original Property Valuation Date is missing.
     """
     try:
         origination_dt = pd.to_datetime(origination_date, errors="coerce")
         valuation_dt = pd.to_datetime(original_property_valuation_date, errors="coerce")
+        if pd.isna(valuation_dt):
+            valuation_dt = pd.to_datetime(most_recent_property_valuation_date, errors="coerce")
         if pd.isna(origination_dt) or pd.isna(valuation_dt):
             return True
         return (origination_dt - valuation_dt).days >= 180
     except:
         return True
 
-# df["flag_valuation_age"] = df.apply(lambda row: validate_valuation_age(row["Original Property Valuation Date"], row["Origination Date"]), axis=1)
+# df["flag_valuation_age"] = df.apply(lambda row: validate_valuation_age(row["Original Property Valuation Date"], row["Origination Date"], row["Most Recent Property Valuation Date"]), axis=1)
 
 
 # 45. Property Valuation After Origination
@@ -1274,6 +1281,39 @@ def validate_most_recent_property_value_requires_valuation_date(
 #     ),
 #     axis=1,
 # )
+
+# 46d. Original vs Most Recent Property Value2 Variance
+# Flag if Most Recent Property Value2 differs from Original Appraised Property Value by more than 10%.
+def validate_property_value2_variance_over_10_percent(
+    original_appraised_property_value,
+    most_recent_property_value2,
+):
+    """
+    Returns True when the absolute variance between Original Appraised Property Value
+    and Most Recent Property Value2 exceeds 10%.
+    """
+    try:
+        if _is_blank(original_appraised_property_value) or _is_blank(most_recent_property_value2):
+            return False
+
+        def _parse_currency_like_value(value):
+            if isinstance(value, str):
+                cleaned = value.strip().replace(",", "").replace("$", "")
+                if cleaned == "":
+                    return None
+                return float(cleaned)
+            return float(value)
+
+        original_value = _parse_currency_like_value(original_appraised_property_value)
+        most_recent_value = _parse_currency_like_value(most_recent_property_value2)
+
+        if original_value in [None, 0] or original_value < 0:
+            return True
+
+        variance_ratio = abs((most_recent_value - original_value) / original_value)
+        return variance_ratio > 0.10
+    except:
+        return True
 
 # 47. Original Term to Maturity
 # Flag if Original Term to Maturity is out of bounds, missing, zero, or not equal to Original Amortization Term
