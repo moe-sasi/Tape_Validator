@@ -1244,6 +1244,89 @@ def validate_most_recent_property_value_requires_valuation_type(
 #     axis=1,
 # )
 
+
+def _normalize_valuation_type_text(value):
+    text = str(value).strip().upper()
+    chars = []
+    for ch in text:
+        if ch.isalnum():
+            chars.append(ch)
+        else:
+            chars.append(" ")
+    return " ".join("".join(chars).split())
+
+
+_ALLOWED_MOST_RECENT_PROPERTY_VALUATION_TYPE_CODES = {
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    98,
+    99,
+}
+
+_ALLOWED_MOST_RECENT_PROPERTY_VALUATION_TYPE_DESCRIPTIONS = {
+    _normalize_valuation_type_text("AVM"),
+    _normalize_valuation_type_text("BPO"),
+    _normalize_valuation_type_text("Tax Assessment"),
+    _normalize_valuation_type_text("Drive-By Form 704"),
+    _normalize_valuation_type_text("URAR Form 1004"),
+    _normalize_valuation_type_text("Form 2070 and Form 2075"),
+    _normalize_valuation_type_text("Form 2055, Form 1075, Form 466, and Form 2095 (Exterior Only)"),
+    _normalize_valuation_type_text("Form 2055 (with Interior Inspection)"),
+    _normalize_valuation_type_text("Automated Valuation Model"),
+    _normalize_valuation_type_text("No Appraisal/Stated Value"),
+    _normalize_valuation_type_text("Desk Review"),
+    _normalize_valuation_type_text("BPO as-is"),
+    _normalize_valuation_type_text("BPO quick sale"),
+    _normalize_valuation_type_text("NADA/Yellow Book Value"),
+    _normalize_valuation_type_text("Land Only"),
+    _normalize_valuation_type_text("Hold"),
+    _normalize_valuation_type_text("Case-Shiller/Other Index Application"),
+    _normalize_valuation_type_text("Form 1004MC"),
+    _normalize_valuation_type_text("Other"),
+    _normalize_valuation_type_text("Unavailable"),
+}
+
+
+def validate_most_recent_property_valuation_type_avm_or_bpo(
+    most_recent_property_valuation_type,
+):
+    """
+    Returns True if Most Recent Property Valuation Type is populated and not in
+    the accepted code/description list.
+    """
+    try:
+        if _is_blank(most_recent_property_valuation_type):
+            return False
+
+        code = _parse_valuation_type_code(most_recent_property_valuation_type)
+        if code in _ALLOWED_MOST_RECENT_PROPERTY_VALUATION_TYPE_CODES:
+            return False
+
+        valuation_type = _normalize_valuation_type_text(most_recent_property_valuation_type)
+        if valuation_type in _ALLOWED_MOST_RECENT_PROPERTY_VALUATION_TYPE_DESCRIPTIONS:
+            return False
+
+        return not any(
+            valuation_type.startswith(f"{allowed_description} ")
+            for allowed_description in _ALLOWED_MOST_RECENT_PROPERTY_VALUATION_TYPE_DESCRIPTIONS
+        )
+    except:
+        return True
+
 # 46c. Most Recent Valuation Date Missing/19010101 (when value present)
 # Flag if Most Recent Property Value is present but Most Recent Valuation Date is missing or 19010101.
 def _is_missing_or_19010101(value):
