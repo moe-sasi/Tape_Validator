@@ -77,6 +77,21 @@ def _parse_percent_like_value(value):
     return float(value)
 
 
+def _parse_numeric_value(value):
+    """Return a float for numeric-like values or None for blanks/invalid values."""
+    if _is_blank(value):
+        return None
+    try:
+        if isinstance(value, str):
+            cleaned = value.strip().replace(",", "").replace("$", "")
+            if cleaned == "":
+                return None
+            return float(cleaned)
+        return float(value)
+    except Exception:
+        return None
+
+
 _PERCENT_OVER_ONE_EXCLUDED_FIELDS = {
     "subsequent_interest_rate_reset_period",
     "subsequent_interest_rate_cap_change_down",
@@ -404,39 +419,58 @@ def validate_buy_down_period(buy_down_period):
     # return buy_down_period != 0 and str(buy_down_period) != "0"
     return buy_down_period > 0
 
-# Cash-out amount
+# Cash-out amount / purpose coherence
 def validate_cash_out_amount(cash_out_amount, loan_purpose, original_loan_amount):
     """
-    Returns True if:
-    - Cash Out Amount is 0 or blank AND Loan Purpose is in [1,2,3,4], OR
-    - Cash Out Amount > 1% of Original Loan Amount AND Loan Purpose is NOT in [1,2,3,4].
+    Returns True when Cash Out Amount is inconsistent with Loan Purpose.
+
+    Consolidates the legacy 1%-of-balance rule with the dedicated refi threshold
+    rule so the engine produces a single issue for cash-out / purpose mismatches.
     """
     try:
-        zero = cash_out_amount in [0, "", None]
-        in_group = loan_purpose in [1, 2, 3, 4]
-        big = abs(float(cash_out_amount)) > abs(float(original_loan_amount)) * 0.01
-        not_in_group = loan_purpose not in [1, 2, 3, 4]
-        return (zero and in_group) or (big and not_in_group)
-    except:
+        amount = _parse_numeric_value(cash_out_amount)
+        original_amount = _parse_numeric_value(original_loan_amount)
+        loan_purpose_id = _parse_numeric_value(loan_purpose)
+
+        if amount is None or original_amount is None or loan_purpose_id is None:
+            return True
+
+        loan_purpose_id = int(float(loan_purpose_id))
+        amount_abs = abs(amount)
+        original_amount_abs = abs(original_amount)
+        exceeds_percent_threshold = amount_abs > original_amount_abs * 0.01
+
+        if loan_purpose_id == 3:
+            return amount < 2000
+
+        if loan_purpose_id == 9:
+            return amount > 2000 or exceeds_percent_threshold
+
+        if loan_purpose_id in {1, 2, 4}:
+            return amount == 0
+
+        return exceeds_percent_threshold
+    except Exception:
         return True
 
 # Refi/Cashout cash-out amount threshold
-def validate_refi_cash_out_threshold(loan_purpose, cash_out_amount):
+def validate_refi_cash_out_threshold(loan_purpose, cash_out_amount, original_loan_amount=None):
     """
-    Returns True if:
-    - Loan Purpose is 9 (Refi) and Cash Out Amount > 2000, OR
-    - Loan Purpose is 3 (Cashout) and Cash Out Amount < 2000.
+    Backward-compatible wrapper for the consolidated cash-out validation.
     """
-    try:
-        lp = int(float(loan_purpose))
-        if lp not in [3, 9]:
-            return False
-        amount = float(cash_out_amount)
-        if lp == 9:
-            return amount > 2000
-        return amount < 2000
-    except:
-        return True
+    if original_loan_amount is None:
+        try:
+            lp = int(float(loan_purpose))
+            if lp not in [3, 9]:
+                return False
+            amount = float(cash_out_amount)
+            if lp == 9:
+                return amount > 2000
+            return amount < 2000
+        except Exception:
+            return True
+
+    return validate_cash_out_amount(cash_out_amount, loan_purpose, original_loan_amount)
 
 # Channel Check
 def validate_channel(channel):
@@ -3128,6 +3162,7 @@ def validate_modification_coherence(
 
 _DISABLED_VALIDATIONS = {
     "validate_mi_coverage_by_ltv",
+    "validate_refi_cash_out_threshold",
 }
 
 __all__ = [
