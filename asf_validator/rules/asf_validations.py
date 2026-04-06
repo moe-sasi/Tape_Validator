@@ -1112,24 +1112,30 @@ def validate_original_ltv(original_loan_amount, sales_price, original_appraised_
 # df["flag_original_ltv"] = df.apply(lambda row: validate_original_ltv(row["Original Loan Amount"], row["Sales Price"], row["Original Appraised Property Value"], row["Original LTV"]), axis=1)
 
 # 44. 180 Days Between Valuation and Origination
-# Flag if more than 180 days between Original Property Valuation Date and Origination Date
+# Flag if more than 180 days between Origination Date and all populated
+# Original/Most Recent Property Valuation Dates.
 def validate_valuation_age(
     original_property_valuation_date,
     origination_date,
     most_recent_property_valuation_date=None,
 ):
     """
-    Returns True if there are 180 or more days between Valuation Date and Origination Date.
-    Falls back to Most Recent Property Valuation Date when Original Property Valuation Date is missing.
+    Returns True when every populated valuation date is 180 or more days
+    before Origination Date.
     """
     try:
-        origination_dt = pd.to_datetime(origination_date, errors="coerce")
-        valuation_dt = pd.to_datetime(original_property_valuation_date, errors="coerce")
-        if pd.isna(valuation_dt):
-            valuation_dt = pd.to_datetime(most_recent_property_valuation_date, errors="coerce")
-        if pd.isna(origination_dt) or pd.isna(valuation_dt):
+        origination_dt = _parse_date_value(origination_date)
+        valuation_dates = [
+            dt
+            for dt in (
+                _parse_date_value(original_property_valuation_date),
+                _parse_date_value(most_recent_property_valuation_date),
+            )
+            if dt is not None
+        ]
+        if origination_dt is None or not valuation_dates:
             return True
-        return (origination_dt - valuation_dt).days >= 180
+        return all((origination_dt - valuation_dt).days >= 180 for valuation_dt in valuation_dates)
     except:
         return True
 
@@ -3120,6 +3126,16 @@ def validate_modification_coherence(
 
     return True
 
-__all__ = [name for name, value in globals().items() if name.startswith("validate_") and callable(value)]
+_DISABLED_VALIDATIONS = {
+    "validate_mi_coverage_by_ltv",
+}
+
+__all__ = [
+    name
+    for name, value in globals().items()
+    if name.startswith("validate_")
+    and callable(value)
+    and name not in _DISABLED_VALIDATIONS
+]
 if "pmt" in globals():
     __all__.append("pmt")
