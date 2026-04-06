@@ -68,6 +68,16 @@ _WARNING_RULES = {
     "validate_total_number_of_borrowers_over_4",
 }
 
+_REPORT_ONLY_RULES = {
+    "validate_buy_down_period": {
+        "result_key": "buy_down_period_report",
+        "columns": {
+            "loan_number": "Loan Number",
+            "buy_down_period": "Buy Down Period",
+        },
+    }
+}
+
 _CANONICAL_REPLACEMENTS = {
     "yrs": "years",
     "yr": "year",
@@ -144,6 +154,10 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
     issues: list[dict[str, object]] = []
     warnings: list[dict[str, object]] = []
     missing_required_records: list[dict[str, object]] = []
+    report_only_records = {
+        config["result_key"]: []
+        for config in _REPORT_ONLY_RULES.values()
+    }
     rule_summary: list[dict[str, object]] = []
     warning_summary: list[dict[str, object]] = []
     skipped_rules: list[dict[str, str]] = []
@@ -345,6 +359,29 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
                 return True
         mask = tape_df.apply(apply_rule, axis=1)
         mask = mask.fillna(False).astype(bool)
+
+        report_only_config = _REPORT_ONLY_RULES.get(rule_name)
+        if report_only_config and not varargs:
+            result_key = report_only_config["result_key"]
+            report_columns = report_only_config["columns"]
+            rule_columns = {
+                param.name: resolved
+                for param, resolved in zip(params, param_columns)
+                if resolved is not None
+            }
+
+            for row_index in mask[mask].index:
+                report_record: dict[str, object] = {}
+                for source_name, display_name in report_columns.items():
+                    if source_name == "loan_number":
+                        value = tape_df.at[row_index, loan_number_column] if loan_number_column else None
+                    else:
+                        source_column = rule_columns.get(source_name)
+                        value = tape_df.at[row_index, source_column] if source_column else None
+                    report_record[display_name] = value
+                report_only_records[result_key].append(report_record)
+            continue
+
         issue_count = int(mask.sum())
         summary_bucket.append({"rule": rule_name, "issue_count": issue_count})
 
@@ -392,7 +429,7 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
     if skipped_rules_df.empty:
         _LOGGER.debug("All validation rules resolved to input columns.")
 
-    return {
+    results = {
         "row_count": len(tape_df),
         "columns": list(tape_df.columns),
         "issues": issues_df,
@@ -402,3 +439,10 @@ def run_validations(tape_df: pd.DataFrame) -> dict:
         "warning_summary": warning_summary_df,
         "skipped_rules": skipped_rules_df,
     }
+    for config in _REPORT_ONLY_RULES.values():
+        result_key = config["result_key"]
+        results[result_key] = pd.DataFrame(
+            report_only_records[result_key],
+            columns=list(config["columns"].values()),
+        )
+    return results

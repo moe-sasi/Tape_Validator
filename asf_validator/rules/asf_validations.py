@@ -415,9 +415,12 @@ def validate_buy_down_period(buy_down_period):
     """
     Returns True if Buy Down Period is a non-zero value (numeric or string).
     """
-
-    # return buy_down_period != 0 and str(buy_down_period) != "0"
-    return buy_down_period > 0
+    if _is_blank(buy_down_period):
+        return False
+    try:
+        return float(buy_down_period) > 0
+    except Exception:
+        return str(buy_down_period).strip() not in {"", "0", "0.0"}
 
 # Cash-out amount / purpose coherence
 def validate_cash_out_amount(cash_out_amount, loan_purpose, original_loan_amount):
@@ -2216,6 +2219,8 @@ def validate_application_date(application_received_date, origination_date):
     from datetime import datetime
     import pandas as pd
     
+   
+
     try:
         application_received_date = pd.to_datetime(application_received_date, errors="coerce")
         origination_date = pd.to_datetime(origination_date, errors="coerce")

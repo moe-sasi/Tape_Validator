@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 import pandas as pd
 
@@ -11,6 +12,12 @@ from asf_validator.report import (
     _build_field_unique_values_df,
     write_report,
 )
+
+
+def _report_output_path() -> Path:
+    base_dir = Path(".codex_test_output")
+    base_dir.mkdir(exist_ok=True)
+    return base_dir / f"{uuid4().hex}_report.xlsx"
 
 
 def test_field_min_max_excludes_selected_fields() -> None:
@@ -57,7 +64,7 @@ def test_field_unique_values_builds_distinct_values_and_handles_missing_field() 
     assert pd.isna(missing_values[0])
 
 
-def test_write_report_writes_unique_values_sheet_and_excludes_from_min_max(tmp_path: Path) -> None:
+def test_write_report_writes_unique_values_sheet_and_excludes_from_min_max() -> None:
     tape_df = pd.DataFrame(
         {
             "Primary Servicer": ["Servicer A", "Servicer B", "Servicer A"],
@@ -66,7 +73,7 @@ def test_write_report_writes_unique_values_sheet_and_excludes_from_min_max(tmp_p
             "Current UPB": [100000, 90000, 95000],
         }
     )
-    output_path = tmp_path / "report.xlsx"
+    output_path = _report_output_path()
     results = {
         "generated_at": "2026-02-19T00:00:00.000000+00:00",
         "row_count": len(tape_df),

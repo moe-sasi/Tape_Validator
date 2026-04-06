@@ -240,6 +240,12 @@ def write_report(results: Mapping[str, Any], output_path: Path) -> None:
         )
     warnings = results.get("warnings", [])
     warnings_df = warnings if isinstance(warnings, pd.DataFrame) else pd.DataFrame(warnings)
+    buy_down_period_report = results.get("buy_down_period_report", [])
+    buy_down_period_report_df = (
+        buy_down_period_report
+        if isinstance(buy_down_period_report, pd.DataFrame)
+        else pd.DataFrame(buy_down_period_report, columns=["Loan Number", "Buy Down Period"])
+    )
     rule_summary_df = results.get("rule_summary")
     warning_summary_df = results.get("warning_summary")
     skipped_rules_df = results.get("skipped_rules")
@@ -302,6 +308,11 @@ def write_report(results: Mapping[str, Any], output_path: Path) -> None:
         if isinstance(issues_df, pd.DataFrame):
             issues_df.to_excel(writer, index=False, sheet_name="issues")
             _autofit_columns(writer, "issues", issues_df)
+        if isinstance(buy_down_period_report_df, pd.DataFrame):
+            buy_down_period_report_df.to_excel(
+                writer, index=False, sheet_name="buy_down_period_report"
+            )
+            _autofit_columns(writer, "buy_down_period_report", buy_down_period_report_df)
         summary_df.to_excel(writer, index=False, sheet_name="summary")
         _autofit_columns(writer, "summary", summary_df)
         if isinstance(field_min_max_df, pd.DataFrame):
