@@ -6,6 +6,10 @@ from typing import Callable, Dict
 
 from asf_validator.rules import asf_validations
 
+_DISABLED_VALIDATIONS = {
+    "validate_cash_to_from_borrower_sanity",
+}
+
 
 def get_validations_registry() -> Dict[str, Callable]:
     """Return a mapping of validation names to callables.
@@ -14,10 +18,14 @@ def get_validations_registry() -> Dict[str, Callable]:
     """
     registry: Dict[str, Callable] = {}
     for name in getattr(asf_validations, "__all__", []):
-        if name.startswith("validate_"):
+        if name.startswith("validate_") and name not in _DISABLED_VALIDATIONS:
             registry[name] = getattr(asf_validations, name)
     if not registry:
         for name, value in vars(asf_validations).items():
-            if name.startswith("validate_") and callable(value):
+            if (
+                name.startswith("validate_")
+                and name not in _DISABLED_VALIDATIONS
+                and callable(value)
+            ):
                 registry[name] = value
     return dict(sorted(registry.items()))
